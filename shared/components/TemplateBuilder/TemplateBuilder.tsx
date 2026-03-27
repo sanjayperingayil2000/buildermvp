@@ -113,10 +113,15 @@ function registerTraitsAndComponents(editor: Editor) {
 
 export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps) {
   const editorRef = useRef<Editor | null>(null);
+  // Start as true — suppress auto-save during the entire init + load + restore sequence
+  const isRestoringRef = useRef(true);
   const [editorReady, setEditorReady] = useState<Editor | null>(null);
 
   useEffect(() => {
     if (editorRef.current) return;
+
+    // Ensure suppression is active for this mount cycle
+    isRestoringRef.current = true;
 
     const editor = grapesjs.init({
       container: '#gjs',
@@ -133,6 +138,31 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
     });
 
     editorRef.current = editor;
+
+    // --- Auto-save rawJson on every meaningful change ---
+    const autoSave = () => {
+      if (isRestoringRef.current) return; // skip during init/restore
+      const projectData = editor.getProjectData();
+      useAppStore.getState().setRawJson(projectData as Record<string, unknown>);
+    };
+
+    editor.on('component:add', autoSave);
+    editor.on('component:remove', autoSave);
+    editor.on('component:update', autoSave);
+    editor.on('style:change', autoSave);
+    editor.on('page:add', autoSave);
+    editor.on('page:remove', autoSave);
+    editor.on('page:update', autoSave);
+
+    // --- Restore saved project data on load ---
+    editor.on('load', () => {
+      const savedRawJson = useAppStore.getState().rawJson;
+      if (savedRawJson && Object.keys(savedRawJson).length > 0) {
+        editor.loadProjectData(savedRawJson as Record<string, unknown>);
+      }
+      // Enable auto-save only AFTER load + restore is complete
+      isRestoringRef.current = false;
+    });
 
     // --- Register traits & component types ---
     registerTraitsAndComponents(editor);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ReactFlow,
@@ -11,9 +11,9 @@ import {
   MarkerType,
   type Node,
   type Edge,
+  type EdgeChange,
+  type NodeChange,
   type Connection,
-  type OnNodesChange,
-  type OnEdgesChange,
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
@@ -28,11 +28,19 @@ import {
   type EdgeAction,
 } from '@/shared/store/useAppStore';
 
-const ITEMS_PER_ROW = 3;
-const NODE_WIDTH = 280;
-const NODE_HEIGHT_BASE = 160;
-const H_GAP = 60;
-const V_GAP = 80;
+function computeDefaultPosition(page: PageDescriptor, allPages: PageDescriptor[]) {
+  const ITEMS_PER_ROW = 3;
+  const NODE_WIDTH = 280;
+  const H_GAP = 80;
+  const V_GAP = 100;
+  const index = allPages.findIndex((p) => p.id === page.id);
+  const col = index % ITEMS_PER_ROW;
+  const row = Math.floor(index / ITEMS_PER_ROW);
+  return {
+    x: col * (NODE_WIDTH + H_GAP) + 60,
+    y: row * (200 + V_GAP) + 60,
+  };
+}
 
 function buildNavMap(edges: Edge[], pages: PageDescriptor[]): NavMapEntry[] {
   return edges.map((edge) => {
@@ -51,62 +59,109 @@ function buildNavMap(edges: Edge[], pages: PageDescriptor[]): NavMapEntry[] {
 }
 
 export default function FlowPage() {
+  const storedNodes = useAppStore((s) => s.flowNodes);
+  const storedEdges = useAppStore((s) => s.flowEdges);
   const pages = useAppStore((s) => s.pages);
-  const flowEdges = useAppStore((s) => s.flowEdges);
 
   const nodeTypes = useMemo(() => ({ pageNode: PageNode }), []);
 
   const initialNodes = useMemo<Node[]>(() => {
-    return pages.map((page, index) => {
-      const col = index % ITEMS_PER_ROW;
-      const row = Math.floor(index / ITEMS_PER_ROW);
-      return {
-        id: page.id,
-        type: 'pageNode',
-        position: {
-          x: col * (NODE_WIDTH + H_GAP) + 60,
-          y: row * (NODE_HEIGHT_BASE + page.actionElements.length * 40 + V_GAP) + 60,
-        },
-        data: {
-          page,
-        },
-        dragHandle: '.node-drag-handle',
-      };
+    // If we have previously saved node positions, restore them
+    if (storedNodes.length > 0) {
+      // Merge stored positions with current page data in case pages changed
+      return pages.map((page) => {
+        const existing = storedNodes.find((n) => n.id === page.id);
+        return {
+          id: page.id,
+          type: 'pageNode',
+          position: existing?.position ?? computeDefaultPosition(page, pages),
+          data: { page },
+          dragHandle: '.node-drag-handle',
+        };
+      });
+    }
+    // No saved state — compute default grid layout
+    return pages.map((page) => ({
+      id: page.id,
+      type: 'pageNode',
+      position: computeDefaultPosition(page, pages),
+      data: { page },
+      dragHandle: '.node-drag-handle',
+    }));
+  }, [pages, storedNodes]);
+
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(storedEdges);
+
+  // Update node data when pages change in the store (e.g. after re-saving in builder)
+  useEffect(() => {
+    if (pages.length === 0) return;
+    setNodes((prev) => {
+      // Keep existing positions but update page data
+      const updated = pages.map((page) => {
+        const existing = prev.find((n) => n.id === page.id);
+        return {
+          id: page.id,
+          type: 'pageNode' as const,
+          position: existing?.position ?? computeDefaultPosition(page, pages),
+          data: { page },
+          dragHandle: '.node-drag-handle',
+        };
+      });
+      useAppStore.getState().setFlowNodes(updated);
+      return updated;
     });
   }, [pages]);
 
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(flowEdges);
-
-  const onNodesChange: OnNodesChange = useCallback(
-    (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
-    [],
-  );
-
-  const onEdgesChange: OnEdgesChange = useCallback(
-    (changes) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [],
-  );
-
-  const onConnect = useCallback((connection: Connection) => {
-    const newEdge: Edge = {
-      id: `edge-${connection.source}-${connection.sourceHandle}-${connection.target}`,
-      source: connection.source!,
-      sourceHandle: connection.sourceHandle,
-      target: connection.target!,
-      targetHandle: connection.targetHandle,
-      animated: true,
-      style: { stroke: '#3b82f6', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-      data: {
-        actionType: 'navigate',
-        apiEndpoint: null,
-        onSuccess: null,
-        onError: null,
-      },
-    };
-    setEdges((prev) => [...prev, newEdge]);
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((prev) => {
+      const updated = applyNodeChanges(changes, prev);
+      useAppStore.getState().setFlowNodes(updated);
+      return updated;
+    });
   }, []);
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      setEdges((prev) => {
+        const updated = applyEdgeChanges(changes, prev);
+        useAppStore.getState().setFlowEdges(updated);
+        useAppStore.getState().setNavMap(buildNavMap(updated, pages));
+        return updated;
+      });
+    },
+    [pages]
+  );
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const newEdge: Edge = {
+        id: `edge-${connection.source}-${connection.sourceHandle}-${connection.target}-${Date.now()}`,
+        source: connection.source!,
+        sourceHandle: connection.sourceHandle ?? null,
+        target: connection.target!,
+        targetHandle: connection.targetHandle ?? null,
+        animated: true,
+        style: { stroke: '#3b82f6', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+        data: {
+          actionType: 'navigate',
+          apiEndpoint: null,
+          onSuccess: null,
+          onError: null,
+        },
+      };
+
+      setEdges((prev) => {
+        const updated = [...prev, newEdge];
+        // sync to store immediately
+        useAppStore.getState().setFlowEdges(updated);
+        useAppStore.getState().setNavMap(buildNavMap(updated, pages));
+        return updated;
+      });
+    },
+    [pages]
+  );
 
   const handleSaveLogic = useCallback(() => {
     const { setFlowNodes, setFlowEdges, setNavMap } = useAppStore.getState();

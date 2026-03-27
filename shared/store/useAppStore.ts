@@ -1,5 +1,6 @@
 'use client';
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { type Node, type Edge } from '@xyflow/react';
 
 export interface PageDescriptor {
@@ -53,16 +54,30 @@ interface AppState {
   setNavMap: (map: NavMapEntry[]) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  rawJson: null,
-  pages: [],
-  flowNodes: [],
-  flowEdges: [],
-  navMap: [],
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      rawJson: null,
+      pages: [],
+      flowNodes: [],
+      flowEdges: [],
+      navMap: [],
 
-  setRawJson: (json) => set({ rawJson: json }),
-  setPages: (pages) => set({ pages }),
-  setFlowNodes: (nodes) => set({ flowNodes: nodes }),
-  setFlowEdges: (edges) => set({ flowEdges: edges }),
-  setNavMap: (map) => set({ navMap: map }),
-}));
+      setRawJson: (json) => set({ rawJson: json }),
+      setPages: (pages) => set({ pages }),
+      setFlowNodes: (nodes) => set({ flowNodes: nodes }),
+      setFlowEdges: (edges) => set({ flowEdges: edges }),
+      setNavMap: (map) => set({ navMap: map }),
+    }),
+    {
+      name: 'kiosk-builder-store',
+      partialize: (state) => ({
+        rawJson: state.rawJson,
+        pages: state.pages,
+        flowNodes: state.flowNodes,
+        flowEdges: state.flowEdges,
+        navMap: state.navMap,
+      }),
+    }
+  )
+);
