@@ -113,16 +113,10 @@ function registerTraitsAndComponents(editor: Editor) {
 
 export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps) {
   const editorRef = useRef<Editor | null>(null);
-  // Start as true — suppress auto-save during the entire init + load + restore sequence
-  const isRestoringRef = useRef(true);
   const [editorReady, setEditorReady] = useState<Editor | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
-    if (editorRef.current) return;
-
-    // Ensure suppression is active for this mount cycle
-    isRestoringRef.current = true;
-
     const editor = grapesjs.init({
       container: '#gjs',
       height: '100%',
@@ -139,53 +133,24 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
 
     editorRef.current = editor;
 
-    // --- Auto-save rawJson on every meaningful change ---
-    const autoSave = () => {
-      if (isRestoringRef.current) return; // skip during init/restore
-      const projectData = editor.getProjectData();
-      useAppStore.getState().setRawJson(projectData as Record<string, unknown>);
-    };
-
-    editor.on('component:add', autoSave);
-    editor.on('component:remove', autoSave);
-    editor.on('component:update', autoSave);
-    editor.on('style:change', autoSave);
-    editor.on('page:add', autoSave);
-    editor.on('page:remove', autoSave);
-    editor.on('page:update', autoSave);
-
-    // --- Restore saved project data on load ---
-    editor.on('load', () => {
-      const savedRawJson = useAppStore.getState().rawJson;
-      if (savedRawJson && Object.keys(savedRawJson).length > 0) {
-        editor.loadProjectData(savedRawJson as Record<string, unknown>);
-      }
-      // Enable auto-save only AFTER load + restore is complete
-      isRestoringRef.current = false;
-    });
-
     // --- Register traits & component types ---
     registerTraitsAndComponents(editor);
 
-    // --- Task 2: Auto-assign data-page-id ---
-    // Set for all existing pages immediately
+    // --- Auto-assign data-page-id ---
     editor.Pages.getAll().forEach((page) => {
       ensurePageId(editor, page.getId());
     });
 
-    // Listen for new pages
     editor.on('page:add', (page: { getId: () => string }) => {
       ensurePageId(editor, page.getId());
     });
 
-    // On page select, re-ensure the page ID (handles component tree recreation)
     editor.on('page:select', () => {
       ensurePageId(editor);
-      // Task 3: Also scan for missing action IDs on page switch
       scanAndAssignActionIds(editor);
     });
 
-    // --- Task 3: Auto-assign data-action-id to buttons/anchors ---
+    // --- Auto-assign data-action-id to buttons/anchors ---
     editor.on('component:add', (component: { get: (key: string) => string; getAttributes: () => Record<string, string>; addAttributes: (attrs: Record<string, string>) => void }) => {
       const type = component.get('type');
       const tagName = component.get('tagName');
@@ -204,15 +169,18 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
     // Initial scan for existing components
     scanAndAssignActionIds(editor);
 
+    // Lightweight unsaved-changes indicator — only flips a local boolean
+    const markDirty = () => setHasUnsavedChanges(true);
+    editor.on('change:changesCount', markDirty);
+
     // Signal that editor is ready for PagesPanel rendering
     setEditorReady(editor);
 
     return () => {
-      if (editorRef.current) {
-        editorRef.current.destroy();
-        editorRef.current = null;
-        setEditorReady(null);
-      }
+      editor.off('change:changesCount', markDirty);
+      editor.destroy();
+      editorRef.current = null;
+      setEditorReady(null);
     };
   }, [pluginOptions]);
 
@@ -223,25 +191,39 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
       return;
     }
 
-    // 1. Get raw project data
     const rawJson = editor.getProjectData();
-
-    // 2. Get structured per-page data
     const pagesForFlow = extractPagesForFlow(editor);
 
-    // 3. Write to Zustand store
     useAppStore.getState().setRawJson(rawJson as Record<string, unknown>);
     useAppStore.getState().setPages(pagesForFlow);
 
-    // 4. Log both for verification
-    console.log('=== Raw GrapesJS Project Data ===');
-    console.log(JSON.stringify(rawJson, null, 2));
-    console.log('=== Structured Pages for Flow ===');
-    console.log(JSON.stringify(pagesForFlow, null, 2));
+    setHasUnsavedChanges(false);
+
+    console.log('Saved:', { projectData: rawJson, extractedPages: pagesForFlow });
+  }, []);
+
+  const handleLoad = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.warn('Editor not initialized yet.');
+      return;
+    }
+
+    const savedRawJson = useAppStore.getState().rawJson;
+    if (
+      savedRawJson &&
+      typeof savedRawJson === 'object' &&
+      Object.keys(savedRawJson).length > 0
+    ) {
+      editor.loadProjectData(savedRawJson as Record<string, unknown>);
+    } else {
+      alert('No saved design found. Design something and click Save first.');
+    }
   }, []);
 
   return (
-<div style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>      <header
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
+      <header
         style={{
           left: 0,
           right: 0,
@@ -250,10 +232,32 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
           alignItems: 'center',
           justifyContent: 'flex-end',
           padding: '0 16px',
+          gap: '10px',
           background: '#2b2e3b',
           borderBottom: '1px solid #3a3f4e',
-flexShrink: 0,        }}
+          flexShrink: 0,
+        }}
       >
+        {hasUnsavedChanges && (
+          <span style={{ fontSize: 12, color: '#f59e0b', marginRight: 4 }}>
+            Unsaved changes
+          </span>
+        )}
+        <button
+          onClick={handleLoad}
+          style={{
+            padding: '8px 20px',
+            backgroundColor: '#4b5563',
+            color: '#e5e7eb',
+            border: 'none',
+            borderRadius: '6px',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+          }}
+        >
+          Load saved design
+        </button>
         <button
           onClick={handleSave}
           style={{
@@ -267,7 +271,7 @@ flexShrink: 0,        }}
             cursor: 'pointer',
           }}
         >
-          Save App UI
+          Save{hasUnsavedChanges ? ' *' : ''}
         </button>
       </header>
       <div
