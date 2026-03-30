@@ -56,6 +56,20 @@ export default function AppHeader() {
         >
           Logic Builder
         </Link>
+        <Link
+          href="/preview"
+          style={{
+            color: '#dae5e6',
+            textDecoration: 'none',
+            fontSize: '14px',
+            fontWeight: 500,
+            padding: '6px 12px',
+            borderRadius: '4px',
+            transition: 'background 0.15s',
+          }}
+        >
+          Preview
+        </Link>
       </nav>
     </header>
   );
