@@ -22,6 +22,7 @@ import '@xyflow/react/dist/style.css';
 
 import AppHeader from '@/shared/components/AppHeader';
 import PageNode from '@/shared/components/flow/PageNode';
+import { DeletableEdge } from '@/shared/components/flow/DeletableEdge';
 import {
   useAppStore,
   type PageDescriptor,
@@ -107,29 +108,33 @@ function computeNodes(
 
 export default function FlowPage() {
   const pages = useAppStore((s) => s.pages);
-  const storedNodes = useAppStore((s) => s.flowNodes);
-  const storedEdges = useAppStore((s) => s.flowEdges);
+  const pendingEdgeUpdate = useAppStore((s) => s.pendingEdgeUpdate);
+  const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
 
   const nodeTypes = useMemo(() => ({ pageNode: PageNode }), []);
+  const edgeTypes = useMemo(() => ({ deletable: DeletableEdge }), []);
 
-  // Compute initial nodes exactly once using lazy initialiser
-  // Do NOT use useMemo — it can re-run during render
   const hasInitialised = useRef(false);
 
-  const [nodes, setNodes] = useState<Node[]>(() =>
-    computeNodes(pages, storedNodes)
-  );
-  const [edges, setEdges] = useState<Edge[]>(storedEdges);
+  const [nodes, setNodes] = useState<Node[]>(() => {
+    const storedNodes = useAppStore.getState().flowNodes;
+    const currentPages = useAppStore.getState().pages;
+    return computeNodes(currentPages, storedNodes);
+  });
+  
+  const [edges, setEdges] = useState<Edge[]>(() => {
+    const storedEdges = useAppStore.getState().flowEdges;
+    return storedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' }));
+  });
   const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
 
-  // Effect 1: Update node data when pages change (after initial mount)
+  // Effect 1: Update node data when pages change after initial mount
   useEffect(() => {
     if (pages.length === 0) return;
     if (!hasInitialised.current) {
       hasInitialised.current = true;
-      return; // skip first run — useState lazy init already handled it
+      return;
     }
-    // pages changed after initial mount (user went back to builder and saved)
     setNodes((prev) =>
       pages.map((page) => {
         const existing = prev.find((n) => n.id === page.id);
@@ -144,32 +149,27 @@ export default function FlowPage() {
     );
   }, [pages]);
 
-  // Effect 2: Sync nodes to store after nodes state settles
+  // Effect 2: Apply pending edge updates from ActionConfigPopup
   useEffect(() => {
-    if (nodes.length > 0) {
-      useAppStore.getState().setFlowNodes(nodes);
-    }
-  }, [nodes]);
-
-  // Effect 3: Sync edges and navMap to store after edges state settles
-  useEffect(() => {
-    useAppStore.getState().setFlowEdges(edges);
-    useAppStore.getState().setNavMap(buildNavMap(edges, pages));
-  }, [edges, pages]);
+    if (pendingEdgeUpdate === null) return;
+    setEdges(pendingEdgeUpdate.map((e) => ({ ...e, type: e.type ?? 'deletable' })));
+    setPendingEdgeUpdate(null);
+  }, [pendingEdgeUpdate, setPendingEdgeUpdate]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((prev) => applyNodeChanges(changes, prev));
-    // store sync is handled by Effect 2
+    // No store write here
   }, []);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     setEdges((prev) => applyEdgeChanges(changes, prev));
-    // store sync is handled by Effect 3
+    // No store write here
   }, []);
 
   const onConnect = useCallback((connection: Connection) => {
     const newEdge: Edge = {
       id: `edge-${connection.source}-${connection.sourceHandle}-${connection.target}-${Date.now()}`,
+      type: 'deletable',
       source: connection.source!,
       sourceHandle: connection.sourceHandle ?? null,
       target: connection.target!,
@@ -185,7 +185,7 @@ export default function FlowPage() {
       } satisfies EdgeAction,
     };
     setEdges((prev) => [...prev, newEdge]);
-    // store sync is handled by Effect 3
+    // No store write here
   }, []);
 
   const rejectConnection = useCallback((msg: string): false => {
@@ -240,18 +240,15 @@ export default function FlowPage() {
   );
 
   const handleSaveLogic = useCallback(() => {
-    const { setFlowNodes, setFlowEdges, setNavMap } = useAppStore.getState();
-
-    setFlowNodes(nodes);
-    setFlowEdges(edges);
-
-    const navMap = buildNavMap(edges, pages);
-    setNavMap(navMap);
+    // Write current canvas state to the store
+    useAppStore.getState().setFlowNodes(nodes);
+    useAppStore.getState().setFlowEdges(edges);
+    useAppStore.getState().setNavMap(buildNavMap(edges, pages));
 
     console.log('=== SAVED LOGIC ===');
-    console.log('Flow nodes:', nodes);
-    console.log('Flow edges:', edges);
-    console.log('Nav map:', navMap);
+    console.log('Nodes:', nodes);
+    console.log('Edges:', edges);
+    console.log('NavMap:', buildNavMap(edges, pages));
 
     window.alert('Logic saved!');
   }, [nodes, edges, pages]);
@@ -323,12 +320,16 @@ export default function FlowPage() {
             >
               Save Logic
             </button>
+            <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6, textAlign: 'right' }}>
+              Click an edge to select it, then press Delete — or hover the edge to reveal the × button
+            </span>
           </div>
 
           <ReactFlow
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -336,6 +337,7 @@ export default function FlowPage() {
             fitView
             fitViewOptions={{ padding: 0.2 }}
             deleteKeyCode="Delete"
+            edgesFocusable={true}
             minZoom={0.3}
             maxZoom={1.5}
             style={{ background: '#0f172a' }}
@@ -362,6 +364,59 @@ export default function FlowPage() {
                 </div>
               </Panel>
             )}
+
+            {/* Handle legend */}
+            <Panel position="bottom-left">
+              <div
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: 8,
+                  padding: '10px 14px',
+                  fontSize: 11,
+                  color: '#94a3b8',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 2 }}>
+                  Handle types
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: '#10b981', border: '2px solid #fff',
+                    display: 'inline-block', flexShrink: 0,
+                  }} />
+                  <span>Navigate — 1 connection max</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: '#f59e0b', border: '2px solid #fff',
+                    display: 'inline-block', flexShrink: 0,
+                  }} />
+                  <span>API call — 3 connections max</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: '#6b7280', border: '2px solid #9ca3af',
+                    display: 'inline-block', flexShrink: 0, opacity: 0.5,
+                  }} />
+                  <span>Saturated — limit reached</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: '#10b981', border: '2px solid #fff',
+                    display: 'inline-block', flexShrink: 0,
+                  }} />
+                  <span style={{ color: '#64748b' }}>Entry — any page can receive connections</span>
+                </div>
+              </div>
+            </Panel>
           </ReactFlow>
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, type NodeProps, MarkerType, type Edge } from '@xyflow/react';
 import { useAppStore, type PageDescriptor, type ActionElement } from '@/shared/store/useAppStore';
 
 interface PageNodeData {
@@ -11,6 +11,7 @@ interface PageNodeData {
 
 export default function PageNode({ data, selected }: NodeProps) {
   const { page } = data as PageNodeData;
+  const flowEdges = useAppStore((s) => s.flowEdges);
 
   return (
     <div
@@ -85,15 +86,33 @@ export default function PageNode({ data, selected }: NodeProps) {
           No interactive elements
         </div>
       ) : (
-        page.actionElements.map((el) => (
-          <ActionRow key={el.id} element={el} />
-        ))
+        page.actionElements.map((el) => {
+          const edgeCount = flowEdges.filter(
+            (e) => e.source === page.id && e.sourceHandle === el.id
+          ).length;
+          return (
+            <ActionRow
+              key={el.id}
+              element={el}
+              currentEdgeCount={edgeCount}
+              pageId={page.id}
+            />
+          );
+        })
       )}
     </div>
   );
 }
 
-function ActionRow({ element }: { element: ActionElement }) {
+function ActionRow({
+  element,
+  currentEdgeCount,
+  pageId,
+}: {
+  element: ActionElement;
+  currentEdgeCount: number;
+  pageId: string;
+}) {
   const [showPopup, setShowPopup] = useState(false);
 
   const actionColor =
@@ -102,6 +121,25 @@ function ActionRow({ element }: { element: ActionElement }) {
       : element.actionType === 'api-call'
       ? '#f59e0b'
       : '#94a3b8';
+
+  const maxConnections =
+    element.actionType === 'api-call' ? 3
+    : element.actionType === 'navigate' ? 1
+    : 1;
+
+  const isSaturated = currentEdgeCount >= maxConnections;
+
+  // Colour scheme:
+  // navigate or none → green (#10b981) when available, grey (#6b7280) when saturated
+  // api-call → amber (#f59e0b) when available, grey (#6b7280) when saturated
+  const handleColor =
+    isSaturated
+      ? '#6b7280'
+      : element.actionType === 'api-call'
+      ? '#f59e0b'
+      : '#10b981';
+
+  const handleBorderColor = isSaturated ? '#9ca3af' : '#ffffff';
 
   const displayLabel =
     element.label && element.label !== element.id
@@ -153,11 +191,15 @@ function ActionRow({ element }: { element: ActionElement }) {
         <span
           style={{
             fontSize: 10,
-            color: '#94a3b8',
+            color: isSaturated ? '#6b7280' : '#94a3b8',
             flexShrink: 0,
           }}
         >
-          {element.actionType === 'none' ? 'tap to configure' : element.actionType}
+          {element.actionType === 'api-call'
+            ? `api-call (${currentEdgeCount}/3)`
+            : element.actionType === 'navigate'
+            ? currentEdgeCount > 0 ? 'connected' : 'navigate'
+            : 'tap to configure'}
         </span>
       </div>
 
@@ -166,15 +208,27 @@ function ActionRow({ element }: { element: ActionElement }) {
         type="source"
         position={Position.Right}
         id={element.id}
+        title={
+          isSaturated
+            ? element.actionType === 'api-call'
+              ? 'Maximum 3 connections reached'
+              : 'Already connected — delete the existing edge to reconnect'
+            : element.actionType === 'api-call'
+            ? `API call — drag to add outcome route (${currentEdgeCount}/3)`
+            : 'Navigate — drag to connect to a target page'
+        }
         style={{
           width: 14,
           height: 14,
-          background: '#3b82f6',
-          border: '2px solid #ffffff',
+          background: handleColor,
+          border: `2px solid ${handleBorderColor}`,
           right: -7,
           top: '50%',
           transform: 'translateY(-50%)',
           zIndex: 10,
+          opacity: isSaturated ? 0.5 : 1,
+          cursor: isSaturated ? 'not-allowed' : 'crosshair',
+          transition: 'background 0.2s, opacity 0.2s',
         }}
       />
 
@@ -182,6 +236,7 @@ function ActionRow({ element }: { element: ActionElement }) {
       {showPopup && (
         <ActionConfigPopup
           element={element}
+          pageId={pageId}
           onClose={() => setShowPopup(false)}
         />
       )}
@@ -191,12 +246,14 @@ function ActionRow({ element }: { element: ActionElement }) {
 
 function ActionConfigPopup({
   element,
+  pageId,
   onClose,
 }: {
   element: ActionElement;
+  pageId: string;
   onClose: () => void;
 }) {
-  const { pages, setPages } = useAppStore();
+  const { pages, setPages, setPendingEdgeUpdate } = useAppStore();
 
   // Initialise local state from the element's current values
   const [actionType, setActionType] = useState<string>(element.actionType);
@@ -229,6 +286,7 @@ function ActionConfigPopup({
   };
 
   const handleSave = () => {
+    // 1. Update pages
     const updatedPages = pages.map((page) => ({
       ...page,
       actionElements: page.actionElements.map((el) =>
@@ -238,13 +296,60 @@ function ActionConfigPopup({
               actionType,
               apiEndpoint: actionType === 'api-call' ? apiEndpoint || null : null,
               method: actionType === 'api-call' ? method : 'POST',
-              outcomes: actionType === 'api-call' ? outcomes.filter((o) => o.outcomeKey && o.targetPageId) : [],
-              navigateTo: actionType === 'navigate' ? el.navigateTo : null,
+              outcomes:
+                actionType === 'api-call'
+                  ? outcomes.filter((o) => o.outcomeKey && o.targetPageId)
+                  : [],
+              navigateTo: null,
             }
           : el
       ),
     }));
     setPages(updatedPages);
+
+    if (actionType === 'api-call') {
+      // Read the current flowEdges directly without a reactive subscription
+      const currentFlowEdges = useAppStore.getState().flowEdges;
+
+      const edgesWithoutThisHandle = currentFlowEdges.filter(
+        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+      );
+
+      const validOutcomes = outcomes.filter((o) => o.outcomeKey && o.targetPageId);
+      const newEdges: Edge[] = validOutcomes.map((outcome) => ({
+        id: `edge-${pageId}-${element.id}-${outcome.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'deletable',
+        source: pageId,
+        sourceHandle: element.id,
+        target: outcome.targetPageId,
+        targetHandle: 'entry',
+        animated: true,
+        style: { stroke: '#f59e0b', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: '#f59e0b' },
+        label: outcome.outcomeKey,
+        labelStyle: { fontSize: 11, fill: '#f59e0b', fontWeight: 600 },
+        labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9 },
+        data: {
+          actionType: 'api-call',
+          apiEndpoint: apiEndpoint || null,
+          method,
+          outcomes: validOutcomes,
+        },
+      }));
+
+      // Signal FlowPage to update its local edges state
+      setPendingEdgeUpdate([...edgesWithoutThisHandle, ...newEdges]);
+
+    } else {
+      // navigate or none — remove all edges from this handle
+      const currentFlowEdges = useAppStore.getState().flowEdges;
+      const updatedEdges = currentFlowEdges.filter(
+        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+      );
+      // Signal FlowPage to update its local edges state
+      setPendingEdgeUpdate(updatedEdges);
+    }
+
     onClose();
   };
 
@@ -304,11 +409,16 @@ function ActionConfigPopup({
           fontSize: 11,
           color: '#64748b',
           background: '#eff6ff',
+          border: '1px solid #bfdbfe',
           borderRadius: 6,
           padding: '8px 10px',
-          lineHeight: 1.5,
+          lineHeight: 1.6,
         }}>
-          Draw a connection from this button&apos;s handle (●) to the target page node on the canvas.
+          <strong style={{ color: '#1e40af', display: 'block', marginBottom: 4 }}>
+            How to set navigation:
+          </strong>
+          Close this panel, then drag from the green handle (●) on the right side of this button
+          to the target page node. Only one connection is allowed for navigate actions.
         </div>
       )}
 

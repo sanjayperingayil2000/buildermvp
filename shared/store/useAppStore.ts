@@ -59,6 +59,10 @@ interface AppState {
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
   setNavMap: (map: NavMapEntry[]) => void;
+
+  // Signal from popup to update local canvas edges
+  pendingEdgeUpdate: Edge[] | null;
+  setPendingEdgeUpdate: (edges: Edge[] | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -69,12 +73,14 @@ export const useAppStore = create<AppState>()(
       flowNodes: [],
       flowEdges: [],
       navMap: [],
+      pendingEdgeUpdate: null,
 
       setRawJson: (json) => set({ rawJson: json }),
       setPages: (pages) => set({ pages }),
       setFlowNodes: (nodes) => set({ flowNodes: nodes }),
       setFlowEdges: (edges) => set({ flowEdges: edges }),
       setNavMap: (map) => set({ navMap: map }),
+      setPendingEdgeUpdate: (edges) => set({ pendingEdgeUpdate: edges }),
     }),
     {
       name: 'kiosk-builder-store',
