@@ -18,13 +18,20 @@ export interface ActionElement {
   actionType: string;
   navigateTo: string | null;
   apiEndpoint: string | null;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
+}
+
+export interface NavMapOutcome {
+  outcomeKey: string;      // the string the API returns, e.g. "success", "error", "pending"
+  targetPageId: string;    // the page to navigate to when this outcome is received
 }
 
 export interface EdgeAction {
   actionType: 'navigate' | 'api-call' | 'none';
-  apiEndpoint?: string | null;
-  onSuccess?: string | null;
-  onError?: string | null;
+  apiEndpoint: string | null;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  outcomes: NavMapOutcome[];
 }
 
 export interface NavMapEntry {

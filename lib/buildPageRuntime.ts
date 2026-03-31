@@ -11,8 +11,14 @@ export function buildPageRuntime(
   page: PageDescriptor,
   navMap: NavMapEntry[]
 ): string {
-  // Build a lookup of actionId -> targetPageId for this page only
-  const routes: Record<string, { actionType: string; targetPageId: string | null; apiEndpoint: string | null; onSuccess: string | null; onError: string | null }> = {};
+  // Build route lookup for this page only
+  const routes: Record<string, {
+    actionType: string;
+    targetPageId: string;
+    apiEndpoint: string | null;
+    method: string;
+    outcomes: Array<{ outcomeKey: string; targetPageId: string }>;
+  }> = {};
 
   navMap.forEach((entry) => {
     if (entry.sourcePageId === page.id) {
@@ -20,16 +26,14 @@ export function buildPageRuntime(
         actionType: entry.action.actionType,
         targetPageId: entry.targetPageId,
         apiEndpoint: entry.action.apiEndpoint ?? null,
-        onSuccess: entry.action.onSuccess ?? null,
-        onError: entry.action.onError ?? null,
+        method: entry.action.method ?? 'POST',
+        outcomes: entry.action.outcomes ?? [],
       };
     }
   });
 
   const routesJson = JSON.stringify(routes);
 
-  // Strip any existing html/head/body wrapper tags from page.html
-  // because we are building a full document ourselves
   const bodyContent = page.html
     .replace(/<html[^>]*>/gi, '')
     .replace(/<\/html>/gi, '')
@@ -43,45 +47,48 @@ export function buildPageRuntime(
 (function () {
   var routes = ${routesJson};
 
+  function navigate(targetPageId) {
+    window.parent.postMessage({ type: 'preview:navigate', to: targetPageId }, '*');
+  }
+
   function handleAction(actionId) {
     var route = routes[actionId];
     if (!route) return;
 
     if (route.actionType === 'navigate' && route.targetPageId) {
-      window.parent.postMessage(
-        { type: 'preview:navigate', to: route.targetPageId },
-        '*'
-      );
+      navigate(route.targetPageId);
+
     } else if (route.actionType === 'api-call' && route.apiEndpoint) {
       window.parent.postMessage({ type: 'preview:api-start' }, '*');
-      fetch(route.apiEndpoint, { method: 'POST' })
-        .then(function (res) {
-          var target = res.ok ? route.onSuccess : route.onError;
-          if (target) {
-            window.parent.postMessage(
-              { type: 'preview:navigate', to: target },
-              '*'
-            );
+
+      fetch(route.apiEndpoint, {
+        method: route.method || 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          // data must have an "outcome" string field
+          var outcomeKey = data && data.outcome ? String(data.outcome) : '';
+          var matched = null;
+          for (var i = 0; i < route.outcomes.length; i++) {
+            if (route.outcomes[i].outcomeKey === outcomeKey) {
+              matched = route.outcomes[i].targetPageId;
+              break;
+            }
+          }
+          window.parent.postMessage({ type: 'preview:api-done', outcome: outcomeKey }, '*');
+          if (matched) {
+            navigate(matched);
           } else {
-            window.parent.postMessage(
-              { type: 'preview:api-done', success: res.ok },
-              '*'
-            );
+            window.parent.postMessage({
+              type: 'preview:api-unmatched',
+              outcome: outcomeKey,
+              available: route.outcomes.map(function(o) { return o.outcomeKey; })
+            }, '*');
           }
         })
-        .catch(function () {
-          var target = route.onError;
-          if (target) {
-            window.parent.postMessage(
-              { type: 'preview:navigate', to: target },
-              '*'
-            );
-          } else {
-            window.parent.postMessage(
-              { type: 'preview:api-done', success: false },
-              '*'
-            );
-          }
+        .catch(function (err) {
+          window.parent.postMessage({ type: 'preview:api-error', message: String(err) }, '*');
         });
     }
   }
@@ -121,3 +128,4 @@ ${runtimeScript}
 </body>
 </html>`;
 }
+

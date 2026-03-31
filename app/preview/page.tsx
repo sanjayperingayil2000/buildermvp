@@ -16,6 +16,7 @@ export default function PreviewPage() {
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [isApiLoading, setIsApiLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'warn' | 'error' } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Set first page as starting point when pages are available
@@ -65,13 +66,33 @@ export default function PreviewPage() {
   const handleMessage = useCallback(
     (event: MessageEvent) => {
       if (!event.data || typeof event.data !== 'object') return;
-      const { type, to } = event.data as { type: string; to?: string };
-      if (type === 'preview:navigate' && to) {
-        navigate(to);
-      } else if (type === 'preview:api-start') {
+      const msg = event.data as {
+        type: string;
+        to?: string;
+        outcome?: string;
+        available?: string[];
+        message?: string;
+      };
+
+      if (msg.type === 'preview:navigate' && msg.to) {
+        setStatusMessage(null);
+        navigate(msg.to);
+      } else if (msg.type === 'preview:api-start') {
         setIsApiLoading(true);
-      } else if (type === 'preview:api-done') {
+        setStatusMessage({ text: 'API call in progress...', type: 'info' });
+      } else if (msg.type === 'preview:api-done') {
         setIsApiLoading(false);
+        setStatusMessage({ text: `API returned outcome: "${msg.outcome}"`, type: 'info' });
+        setTimeout(() => setStatusMessage(null), 3000);
+      } else if (msg.type === 'preview:api-unmatched') {
+        setIsApiLoading(false);
+        setStatusMessage({
+          text: `API returned "${msg.outcome}" but no route matches. Available: ${(msg.available ?? []).join(', ')}`,
+          type: 'warn',
+        });
+      } else if (msg.type === 'preview:api-error') {
+        setIsApiLoading(false);
+        setStatusMessage({ text: `API error: ${msg.message}`, type: 'error' });
       }
     },
     [navigate]
@@ -211,18 +232,28 @@ export default function PreviewPage() {
           {currentPage?.name ?? '—'}
         </span>
 
-        {/* API loading indicator */}
-        {isApiLoading && (
+        {/* Status message */}
+        {statusMessage && (
           <span
             style={{
               fontSize: 12,
-              color: '#f59e0b',
-              background: '#422006',
               padding: '2px 10px',
               borderRadius: 20,
+              background:
+                statusMessage.type === 'error'
+                  ? '#450a0a'
+                  : statusMessage.type === 'warn'
+                  ? '#422006'
+                  : '#0c2a4a',
+              color:
+                statusMessage.type === 'error'
+                  ? '#fca5a5'
+                  : statusMessage.type === 'warn'
+                  ? '#fbbf24'
+                  : '#93c5fd',
             }}
           >
-            API call in progress...
+            {statusMessage.text}
           </span>
         )}
 

@@ -8,6 +8,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   MarkerType,
   type Node,
   type Edge,
@@ -43,19 +44,40 @@ function computeDefaultPosition(page: PageDescriptor, allPages: PageDescriptor[]
 }
 
 function buildNavMap(edges: Edge[], pages: PageDescriptor[]): NavMapEntry[] {
-  return edges.map((edge) => {
-    return {
+  const entryMap = new Map<string, NavMapEntry>();
+
+  edges.forEach((edge) => {
+    const key = `${edge.source}::${edge.sourceHandle}`;
+    if (entryMap.has(key)) return;
+
+    const sourcePage = pages.find((p) => p.id === edge.source);
+    const actionElement = sourcePage?.actionElements.find(
+      (el) => el.id === edge.sourceHandle
+    );
+    const edgeData = edge.data as EdgeAction | undefined;
+
+    const actionType =
+      (actionElement?.actionType as EdgeAction['actionType']) ??
+      edgeData?.actionType ??
+      'navigate';
+    const apiEndpoint =
+      actionElement?.apiEndpoint ?? edgeData?.apiEndpoint ?? null;
+    const method =
+      (actionElement?.method as EdgeAction['method']) ??
+      edgeData?.method ??
+      'POST';
+    const outcomes =
+      actionElement?.outcomes ?? edgeData?.outcomes ?? [];
+
+    entryMap.set(key, {
       sourcePageId: edge.source,
       sourceHandleId: edge.sourceHandle ?? '',
       targetPageId: edge.target,
-      action: {
-        actionType: (edge.data?.actionType as EdgeAction['actionType']) ?? 'navigate',
-        apiEndpoint: (edge.data?.apiEndpoint as string) ?? null,
-        onSuccess: (edge.data?.onSuccess as string) ?? null,
-        onError: (edge.data?.onError as string) ?? null,
-      },
-    };
+      action: { actionType, apiEndpoint, method, outcomes },
+    });
   });
+
+  return Array.from(entryMap.values());
 }
 
 function computeNodes(
@@ -98,6 +120,7 @@ export default function FlowPage() {
     computeNodes(pages, storedNodes)
   );
   const [edges, setEdges] = useState<Edge[]>(storedEdges);
+  const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
 
   // Effect 1: Update node data when pages change (after initial mount)
   useEffect(() => {
@@ -157,13 +180,64 @@ export default function FlowPage() {
       data: {
         actionType: 'navigate',
         apiEndpoint: null,
-        onSuccess: null,
-        onError: null,
-      },
+        method: 'POST',
+        outcomes: [],
+      } satisfies EdgeAction,
     };
     setEdges((prev) => [...prev, newEdge]);
     // store sync is handled by Effect 3
   }, []);
+
+  const rejectConnection = useCallback((msg: string): false => {
+    setConnectionRejection(msg);
+    setTimeout(() => setConnectionRejection(null), 3000);
+    return false;
+  }, []);
+
+  const isValidConnection = useCallback(
+    (connection: Edge | Connection): boolean => {
+      const { source, sourceHandle, target } = connection;
+
+      // Prevent self-connections
+      if (source === target) return false;
+
+      // Find the action element for this source handle
+      const sourcePage = pages.find((p) => p.id === source);
+      const actionElement = sourcePage?.actionElements.find(
+        (el) => el.id === sourceHandle
+      );
+      const actionType = actionElement?.actionType ?? 'none';
+
+      // Count how many edges already leave this specific handle
+      const existingEdgesFromHandle = edges.filter(
+        (e) => e.source === source && e.sourceHandle === sourceHandle
+      );
+      const existingCount = existingEdgesFromHandle.length;
+
+      if (actionType === 'navigate' || actionType === 'none') {
+        if (existingCount >= 1) {
+          return rejectConnection(
+            'This button already has a connection. Navigate buttons can only go to one page. ' +
+            'To route conditionally, change the action type to "API call" in the button configuration.'
+          );
+        }
+        return true;
+      }
+
+      if (actionType === 'api-call') {
+        if (existingCount >= 3) {
+          return rejectConnection(
+            'This button already has 3 connections. API call buttons support a maximum of 3 outcome routes.'
+          );
+        }
+        return true;
+      }
+
+      // Default: allow
+      return true;
+    },
+    [edges, pages, rejectConnection]
+  );
 
   const handleSaveLogic = useCallback(() => {
     const { setFlowNodes, setFlowEdges, setNavMap } = useAppStore.getState();
@@ -258,6 +332,7 @@ export default function FlowPage() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             deleteKeyCode="Delete"
@@ -268,6 +343,25 @@ export default function FlowPage() {
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e2e8f0" />
             <Controls />
             <MiniMap nodeColor="#3b82f6" maskColor="rgba(0,0,0,0.05)" />
+            {connectionRejection && (
+              <Panel position="top-center">
+                <div
+                  style={{
+                    background: '#450a0a',
+                    border: '1px solid #991b1b',
+                    color: '#fca5a5',
+                    padding: '10px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    maxWidth: 420,
+                    textAlign: 'center',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  {connectionRejection}
+                </div>
+              </Panel>
+            )}
           </ReactFlow>
         </div>
       )}
