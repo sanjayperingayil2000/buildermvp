@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useAppStore } from '@/shared/store/useAppStore';
 import { buildPageRuntime } from '@/lib/buildPageRuntime';
+import { BANK_DETAILS_DB } from '@/shared/config/banks';
 
 // Mobile frame dimensions — the simulated device screen
 const FRAME_WIDTH = 390;
@@ -12,6 +13,7 @@ const FRAME_HEIGHT = 844;
 export default function PreviewPage() {
   const pages = useAppStore((s) => s.pages);
   const navMap = useAppStore((s) => s.navMap);
+  const setActiveContext = useAppStore((s) => s.setActiveContext);
 
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -26,6 +28,31 @@ export default function PreviewPage() {
       setHistory([pages[0].id]);
     }
   }, [pages, currentPageId]);
+
+  // Dynamic Context DOM Mutation Hook (Task 4)
+  useEffect(() => {
+    const { activeContext } = useAppStore.getState();
+    if (!activeContext || !activeContext.bankId) return;
+
+    const bankData = BANK_DETAILS_DB[activeContext.bankId];
+    if (!bankData) return;
+
+    // We add a tiny delay to ensure the iframe has mounted its new content
+    const timeoutId = setTimeout(() => {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc) return;
+
+      const nameEl = doc.querySelector('[data-dynamic="bank-name"]');
+      const logoEl = doc.querySelector('[data-dynamic="bank-logo"]');
+      const descEl = doc.querySelector('[data-dynamic="bank-desc"]');
+
+      if (nameEl) nameEl.textContent = bankData.name;
+      if (logoEl) logoEl.setAttribute('src', bankData.logo);
+      if (descEl) descEl.textContent = bankData.desc;
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentPageId, pages]);
 
   // Navigate to a page by id
   const navigate = useCallback(
@@ -72,6 +99,9 @@ export default function PreviewPage() {
         outcome?: string;
         available?: string[];
         message?: string;
+        actionId?: string;
+        contextId?: string;
+        realValue?: string;
       };
 
       if (msg.type === 'preview:navigate' && msg.to) {
@@ -93,9 +123,53 @@ export default function PreviewPage() {
       } else if (msg.type === 'preview:api-error') {
         setIsApiLoading(false);
         setStatusMessage({ text: `API error: ${msg.message}`, type: 'error' });
+      } else if (msg.type === 'preview:context-link-click' && msg.contextId) {
+        setActiveContext({ bankId: msg.contextId });
+      } else if (msg.type === 'preview:secure-entry-submit' && msg.actionId) {
+        const currentPageDescriptor = pages.find((p) => p.id === currentPageId);
+        const actionElement = currentPageDescriptor?.actionElements.find(a => a.id === msg.actionId);
+        if (actionElement?.actionType === 'secure_entry_routing') {
+          const realValue = (msg.realValue || '').replace(/\D/g, '');
+          let outcomeKey = '';
+          const activeBankId = msg.contextId ?? null;
+
+          if (realValue.length === 12) {
+            outcomeKey = 'phone_12';
+          } else if (realValue.length === 16) {
+            outcomeKey = 'card_16';
+          } else {
+            return alert('Please enter exactly 12 or 16 digits.');
+          }
+
+          // SET CONTEXT IN ZUSTAND BEFORE NAVIGATING
+          setActiveContext(activeBankId ? { bankId: activeBankId } : null);
+
+          // FIND ROUTE & NAVIGATE
+          const conditionalRoute = navMap.find(n => 
+            n.sourcePageId === currentPageId && 
+            n.sourceHandleId === `${msg.actionId}__${outcomeKey}`
+          );
+
+          if (conditionalRoute && conditionalRoute.targetPageId) {
+            if (outcomeKey === 'card_16' && !activeBankId && conditionalRoute.action.fallbackPageId) {
+              navigate(conditionalRoute.action.fallbackPageId);
+            } else {
+              navigate(conditionalRoute.targetPageId);
+            }
+          } else {
+            console.warn(`No route found for outcome: ${outcomeKey}`);
+            setStatusMessage({ text: `No routing configured for: ${outcomeKey}`, type: 'warn' });
+          }
+        }
+      } else if (msg.type === 'preview:action-click' && msg.actionId) {
+        const currentPageDescriptor = pages.find((p) => p.id === currentPageId);
+        const actionElement = currentPageDescriptor?.actionElements.find(a => a.id === msg.actionId);
+        if (actionElement?.actionType === 'secure_entry_routing') {
+          alert('Secure input not detected. Make sure the Secure Entry widget is on this page.');
+        }
       }
     },
-    [navigate]
+    [navigate, pages, currentPageId, navMap, setActiveContext]
   );
 
   // Attach and clean up the message listener
@@ -397,6 +471,30 @@ function MobileFrame({ srcDoc, pageKey, iframeRef }: MobileFrameProps) {
   const scale = displayHeight / FRAME_HEIGHT;
   const displayWidth = FRAME_WIDTH * scale;
 
+  const handleIframeLoad = () => {
+    const context = useAppStore.getState().activeContext;
+    if (!context || !context.bankId) return;
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+
+    const details = BANK_DETAILS_DB[context.bankId];
+    if (details) {
+      doc.querySelectorAll('[data-dynamic="bank-name"]').forEach(el => {
+        (el as HTMLElement).innerText = details.name;
+      });
+      doc.querySelectorAll('[data-dynamic="bank-logo"]').forEach(el => {
+        if (el.tagName.toLowerCase() === 'img') {
+          (el as HTMLImageElement).src = details.logo;
+        } else {
+          (el as HTMLElement).innerText = details.name;
+        }
+      });
+      doc.querySelectorAll('[data-dynamic="bank-desc"]').forEach(el => {
+        (el as HTMLElement).innerText = details.desc;
+      });
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       {/* Phone shell */}
@@ -454,6 +552,7 @@ function MobileFrame({ srcDoc, pageKey, iframeRef }: MobileFrameProps) {
               key={pageKey}
               ref={iframeRef}
               srcDoc={srcDoc}
+              onLoad={handleIframeLoad}
               style={{
                 width: FRAME_WIDTH,
                 height: FRAME_HEIGHT,

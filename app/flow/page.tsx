@@ -69,12 +69,14 @@ function buildNavMap(edges: Edge[], pages: PageDescriptor[]): NavMapEntry[] {
       'POST';
     const outcomes =
       actionElement?.outcomes ?? edgeData?.outcomes ?? [];
+    const fallbackPageId =
+      actionElement?.fallbackPageId ?? edgeData?.fallbackPageId;
 
     entryMap.set(key, {
       sourcePageId: edge.source,
       sourceHandleId: edge.sourceHandle ?? '',
       targetPageId: edge.target,
-      action: { actionType, apiEndpoint, method, outcomes },
+      action: { actionType, apiEndpoint, method, outcomes, fallbackPageId },
     });
   });
 
@@ -204,7 +206,7 @@ export default function FlowPage() {
       // Find the action element for this source handle
       const sourcePage = pages.find((p) => p.id === source);
       const actionElement = sourcePage?.actionElements.find(
-        (el) => el.id === sourceHandle
+        (el) => sourceHandle && (sourceHandle === el.id || sourceHandle.startsWith(el.id + '__'))
       );
       const actionType = actionElement?.actionType ?? 'none';
 
@@ -214,11 +216,10 @@ export default function FlowPage() {
       );
       const existingCount = existingEdgesFromHandle.length;
 
-      if (actionType === 'navigate' || actionType === 'none') {
+      if (actionType === 'navigate' || actionType === 'none' || actionType === 'secure_entry_routing') {
         if (existingCount >= 1) {
           return rejectConnection(
-            'This button already has a connection. Navigate buttons can only go to one page. ' +
-            'To route conditionally, change the action type to "API call" in the button configuration.'
+            'This handle already has a connection. Each outcome can only conditionally route to one page.'
           );
         }
         return true;

@@ -1,4 +1,5 @@
 import type { NavMapEntry } from '@/shared/store/useAppStore';
+import { BIN_TO_BANK_ID } from '@/shared/config/banks';
 
 export interface PageDescriptor {
   id: string;
@@ -46,16 +47,53 @@ export function buildPageRuntime(
 <script>
 (function () {
   var routes = ${routesJson};
+  var binToBankId = ${JSON.stringify(BIN_TO_BANK_ID)};
 
   function navigate(targetPageId) {
     window.parent.postMessage({ type: 'preview:navigate', to: targetPageId }, '*');
   }
 
-  function handleAction(actionId) {
+  function handleAction(el, actionId) {
     var route = routes[actionId];
-    if (!route) return;
+    if (!route) {
+      if (actionId === 'btn-secure-submit') {
+        var primaryInput =
+          document.querySelector('.primary-input') ||
+          document.querySelector('[data-widget-input="primary"]');
+        var realValue = '';
+
+        if (primaryInput) {
+          realValue = primaryInput.getAttribute('data-real-value') || '';
+          if (!realValue) {
+            realValue = String(primaryInput.value || '').replace(/\\D/g, '');
+          }
+        }
+
+        var bin = realValue.length >= 6 ? realValue.substring(0, 6) : null;
+        var contextId = bin ? (binToBankId[bin] || null) : null;
+
+        window.parent.postMessage(
+          {
+            type: 'preview:secure-entry-submit',
+            actionId: actionId,
+            realValue: realValue,
+            contextId: contextId,
+          },
+          '*'
+        );
+        return;
+      }
+
+      // Pass unhandled action clicks up to the parent window for generic processing
+      window.parent.postMessage({ type: 'preview:action-click', actionId: actionId }, '*');
+      return;
+    }
 
     if (route.actionType === 'navigate' && route.targetPageId) {
+      var bankId = el ? el.getAttribute('data-bank-id') : null;
+      if (bankId) {
+        window.parent.postMessage({ type: 'preview:context-link-click', actionId: actionId, contextId: bankId }, '*');
+      }
       navigate(route.targetPageId);
 
     } else if (route.actionType === 'api-call' && route.apiEndpoint) {
@@ -98,9 +136,11 @@ export function buildPageRuntime(
       el.addEventListener('click', function (e) {
         e.preventDefault();
         var id = el.getAttribute('data-action-id');
-        if (id) handleAction(id);
+        if (id) handleAction(el, id);
       });
     });
+
+    // Context links are handled via normal action routing.
   }
 
   if (document.readyState === 'loading') {

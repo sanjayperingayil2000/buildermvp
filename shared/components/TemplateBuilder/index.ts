@@ -5,6 +5,10 @@ import loadCommands from './commands';
 import loadPanels from './panels';
 import loadStyles from './styles';
 
+import { addSecureEntryWidget } from './secureEntryWidget';
+import { bankListWidgetPlugin } from './bankListWidget';
+import { dynamicBankDetailsWidgetPlugin } from './dynamicBankDetailsWidget';
+
 const plugin: Plugin<PluginOptions> = (editor, opts: Partial<PluginOptions> = {}) => {
   let config = editor.getConfig();
 
@@ -81,6 +85,9 @@ const plugin: Plugin<PluginOptions> = (editor, opts: Partial<PluginOptions> = {}
   loadBlocks(editor, options);
   loadPanels(editor, options);
   loadStyles(editor, options);
+  addSecureEntryWidget(editor);
+  bankListWidgetPlugin(editor, {});
+  dynamicBankDetailsWidgetPlugin(editor, {});
 };
 
 export default plugin;

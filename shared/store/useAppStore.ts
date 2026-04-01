@@ -20,6 +20,7 @@ export interface ActionElement {
   apiEndpoint: string | null;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
+  fallbackPageId?: string;
 }
 
 export interface NavMapOutcome {
@@ -28,10 +29,11 @@ export interface NavMapOutcome {
 }
 
 export interface EdgeAction {
-  actionType: 'navigate' | 'api-call' | 'none';
+  actionType: 'navigate' | 'api-call' | 'secure_entry_routing' | 'none';
   apiEndpoint: string | null;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   outcomes: NavMapOutcome[];
+  fallbackPageId?: string;
 }
 
 export interface NavMapEntry {
@@ -63,6 +65,10 @@ interface AppState {
   // Signal from popup to update local canvas edges
   pendingEdgeUpdate: Edge[] | null;
   setPendingEdgeUpdate: (edges: Edge[] | null) => void;
+
+  // Runtime Context Passing
+  activeContext: Record<string, any> | null;
+  setActiveContext: (context: Record<string, any> | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -81,6 +87,8 @@ export const useAppStore = create<AppState>()(
       setFlowEdges: (edges) => set({ flowEdges: edges }),
       setNavMap: (map) => set({ navMap: map }),
       setPendingEdgeUpdate: (edges) => set({ pendingEdgeUpdate: edges }),
+      activeContext: null,
+      setActiveContext: (context) => set({ activeContext: context }),
     }),
     {
       name: 'kiosk-builder-store',

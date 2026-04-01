@@ -203,34 +203,61 @@ function ActionRow({
         </span>
       </div>
 
-      {/* Source handle — on the right edge of this row */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id={element.id}
-        title={
-          isSaturated
-            ? element.actionType === 'api-call'
-              ? 'Maximum 3 connections reached'
-              : 'Already connected — delete the existing edge to reconnect'
-            : element.actionType === 'api-call'
-            ? `API call — drag to add outcome route (${currentEdgeCount}/3)`
-            : 'Navigate — drag to connect to a target page'
-        }
-        style={{
-          width: 14,
-          height: 14,
-          background: handleColor,
-          border: `2px solid ${handleBorderColor}`,
-          right: -7,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: 10,
-          opacity: isSaturated ? 0.5 : 1,
-          cursor: isSaturated ? 'not-allowed' : 'crosshair',
-          transition: 'background 0.2s, opacity 0.2s',
-        }}
-      />
+      {/* Source handle(s) — on the right edge of this row */}
+      {element.actionType === 'secure_entry_routing' ? (
+        <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 20 }}>
+          {(element.outcomes || []).map((outcome, idx) => {
+            if (!outcome.outcomeKey) return null;
+            const topOffset = 20 + idx * 16; 
+            return (
+              <Handle
+                key={outcome.outcomeKey}
+                type="source"
+                position={Position.Right}
+                id={`${element.id}__${outcome.outcomeKey}`}
+                title={`Secure Route: ${outcome.outcomeKey}`}
+                style={{
+                  width: 10,
+                  height: 10,
+                  background: '#ec4899',
+                  border: '1.5px solid #ffffff',
+                  right: -5,
+                  top: topOffset,
+                  zIndex: 10,
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <Handle
+          type="source"
+          position={Position.Right}
+          id={element.id}
+          title={
+            isSaturated
+              ? element.actionType === 'api-call'
+                ? 'Maximum 3 connections reached'
+                : 'Already connected — delete the existing edge to reconnect'
+              : element.actionType === 'api-call'
+              ? `API call — drag to add outcome route (${currentEdgeCount}/3)`
+              : 'Navigate — drag to connect to a target page'
+          }
+          style={{
+            width: 14,
+            height: 14,
+            background: handleColor,
+            border: `2px solid ${handleBorderColor}`,
+            right: -7,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 10,
+            opacity: isSaturated ? 0.5 : 1,
+            cursor: isSaturated ? 'not-allowed' : 'crosshair',
+            transition: 'background 0.2s, opacity 0.2s',
+          }}
+        />
+      )}
 
       {/* Configuration popup */}
       {showPopup && (
@@ -265,6 +292,19 @@ function ActionConfigPopup({
     (element as ActionElement & { outcomes?: Array<{ outcomeKey: string; targetPageId: string }> })
       .outcomes ?? []
   );
+  const [fallbackPageId, setFallbackPageId] = useState<string>(element.fallbackPageId || '');
+
+  const handleActionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newVal = e.target.value;
+    setActionType(newVal);
+    if (newVal === 'secure_entry_routing') {
+      setOutcomes([
+        { outcomeKey: 'phone_12', targetPageId: '' },
+        { outcomeKey: 'card_16', targetPageId: '' },
+      ]);
+      setFallbackPageId('');
+    }
+  };
 
   const addOutcome = () => {
     if (outcomes.length >= 3) return;
@@ -286,54 +326,61 @@ function ActionConfigPopup({
   };
 
   const handleSave = () => {
-    // 1. Update pages
     const updatedPages = pages.map((page) => ({
       ...page,
-      actionElements: page.actionElements.map((el) =>
-        el.id === element.id
+      actionElements: page.actionElements.map((el) => {
+        const isAdvanced = actionType === 'api-call' || actionType === 'secure_entry_routing';
+        return el.id === element.id
           ? {
               ...el,
               actionType,
-              apiEndpoint: actionType === 'api-call' ? apiEndpoint || null : null,
-              method: actionType === 'api-call' ? method : 'POST',
-              outcomes:
-                actionType === 'api-call'
-                  ? outcomes.filter((o) => o.outcomeKey && o.targetPageId)
-                  : [],
+              apiEndpoint: isAdvanced ? apiEndpoint || null : null,
+              method: isAdvanced ? method : 'POST',
+              outcomes: isAdvanced ? outcomes : [],
+              fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
               navigateTo: null,
             }
-          : el
-      ),
+          : el;
+      }),
     }));
     setPages(updatedPages);
 
-    if (actionType === 'api-call') {
+    if (actionType === 'api-call' || actionType === 'secure_entry_routing') {
       // Read the current flowEdges directly without a reactive subscription
       const currentFlowEdges = useAppStore.getState().flowEdges;
 
+      // Ensure we clean up any edges from this source handle
       const edgesWithoutThisHandle = currentFlowEdges.filter(
-        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+        (e) => e.source !== pageId || (
+          actionType === 'secure_entry_routing'
+            ? !e.sourceHandle?.startsWith(element.id) 
+            : e.sourceHandle !== element.id
+        )
       );
 
       const validOutcomes = outcomes.filter((o) => o.outcomeKey && o.targetPageId);
+      const isRouteColored = actionType === 'secure_entry_routing';
+      const routeColor = '#ec4899';
+      
       const newEdges: Edge[] = validOutcomes.map((outcome) => ({
-        id: `edge-${pageId}-${element.id}-${outcome.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `edge-${pageId}-${element.id}-${outcome.outcomeKey}-${outcome.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         type: 'deletable',
         source: pageId,
-        sourceHandle: element.id,
+        sourceHandle: actionType === 'secure_entry_routing' ? `${element.id}__${outcome.outcomeKey}` : element.id,
         target: outcome.targetPageId,
         targetHandle: 'entry',
         animated: true,
-        style: { stroke: '#f59e0b', strokeWidth: 2 },
-        markerEnd: { type: 'arrowclosed', color: '#f59e0b' },
+        style: { stroke: isRouteColored ? routeColor : '#f59e0b', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: isRouteColored ? routeColor : '#f59e0b' },
         label: outcome.outcomeKey,
-        labelStyle: { fontSize: 11, fill: '#f59e0b', fontWeight: 600 },
+        labelStyle: { fontSize: 11, fill: isRouteColored ? routeColor : '#f59e0b', fontWeight: 600 },
         labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9 },
         data: {
-          actionType: 'api-call',
+          actionType: actionType,
           apiEndpoint: apiEndpoint || null,
           method,
           outcomes: validOutcomes,
+          fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
         },
       }));
 
@@ -386,6 +433,9 @@ function ActionConfigPopup({
         width: 280,
         boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
         fontFamily: 'system-ui, sans-serif',
+        maxHeight: '80vh',
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -396,10 +446,11 @@ function ActionConfigPopup({
 
       {/* Action type */}
       <label style={labelStyle}>Action type</label>
-      <select value={actionType} onChange={(e) => setActionType(e.target.value)} style={inputStyle}>
+      <select value={actionType} onChange={handleActionTypeChange} style={inputStyle}>
         <option value="none">None</option>
         <option value="navigate">Navigate to page</option>
         <option value="api-call">API call</option>
+        <option value="secure_entry_routing">Secure Entry Routing</option>
       </select>
 
       {/* Navigate hint */}
@@ -422,30 +473,34 @@ function ActionConfigPopup({
         </div>
       )}
 
-      {/* API call fields */}
-      {actionType === 'api-call' && (
+      {/* API call fields and Secure Routing */}
+      {(actionType === 'api-call' || actionType === 'secure_entry_routing') && (
         <>
-          {/* Method + Endpoint */}
-          <label style={labelStyle}>HTTP method</label>
-          <select
-            value={method}
-            onChange={(e) => setMethod(e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE')}
-            style={inputStyle}
-          >
-            <option value="POST">POST</option>
-            <option value="GET">GET</option>
-            <option value="PUT">PUT</option>
-            <option value="DELETE">DELETE</option>
-          </select>
+          {/* Method + Endpoint - only shown for api-call */}
+          {actionType === 'api-call' && (
+            <>
+              <label style={labelStyle}>HTTP method</label>
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE')}
+                style={inputStyle}
+              >
+                <option value="POST">POST</option>
+                <option value="GET">GET</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+              </select>
 
-          <label style={labelStyle}>API endpoint URL</label>
-          <input
-            type="text"
-            value={apiEndpoint}
-            onChange={(e) => setApiEndpoint(e.target.value)}
-            placeholder="/api/mock-payment or {{station.paymentApi}}"
-            style={inputStyle}
-          />
+              <label style={labelStyle}>API endpoint URL</label>
+              <input
+                type="text"
+                value={apiEndpoint}
+                onChange={(e) => setApiEndpoint(e.target.value)}
+                placeholder="/api/mock-payment or {{station.paymentApi}}"
+                style={inputStyle}
+              />
+            </>
+          )}
 
           {/* Outcomes */}
           <div style={{
@@ -460,9 +515,9 @@ function ActionConfigPopup({
               marginBottom: 8,
             }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
-                Outcome routes ({outcomes.length}/3)
+                Outcome routes {actionType === 'api-call' ? `(${outcomes.length}/3)` : `(${outcomes.length})`}
               </span>
-              {outcomes.length < 3 && (
+              {outcomes.length < 3 && actionType === 'api-call' && (
                 <button
                   onClick={addOutcome}
                   style={{
@@ -511,28 +566,31 @@ function ActionConfigPopup({
                   <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
                     Outcome {i + 1}
                   </span>
-                  <button
-                    onClick={() => removeOutcome(i)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#ef4444',
-                      fontSize: 11,
-                      padding: 0,
-                    }}
-                  >
-                    Remove
-                  </button>
+                  {actionType === 'api-call' && (
+                    <button
+                      onClick={() => removeOutcome(i)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#ef4444',
+                        fontSize: 11,
+                        padding: 0,
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
 
-                <label style={{ ...labelStyle, marginTop: 0 }}>When API returns outcome =</label>
+                <label style={{ ...labelStyle, marginTop: 0 }}>Outcome Key =</label>
                 <input
                   type="text"
                   value={outcome.outcomeKey}
                   onChange={(e) => updateOutcome(i, 'outcomeKey', e.target.value)}
                   placeholder='e.g. "success" or "insufficient_funds"'
                   style={inputStyle}
+                  disabled={actionType === 'secure_entry_routing'}
                 />
 
                 <label style={labelStyle}>Navigate to page</label>
@@ -550,6 +608,38 @@ function ActionConfigPopup({
                 </select>
               </div>
             ))}
+            
+            {/* Fallback Page input exclusively for Secure Entry Routing */}
+            {actionType === 'secure_entry_routing' && (
+              <div
+                style={{
+                  background: '#fff1f2',
+                  border: '1px solid #fecdd3',
+                  borderRadius: 6,
+                  padding: '10px',
+                  marginTop: 10,
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#be123c', marginBottom: 6 }}>
+                  Unrecognized Card Fallback Page
+                </div>
+                <div style={{ fontSize: 10, color: '#9f1239', marginBottom: 8, lineHeight: 1.4 }}>
+                  If a 16-digit card number is entered but the Mexican BIN is not recognized in the system, the user will be routed here.
+                </div>
+                <select
+                  value={fallbackPageId}
+                  onChange={(e) => setFallbackPageId(e.target.value)}
+                  style={{...inputStyle, borderColor: '#fecdd3'}}
+                >
+                  <option value="">— select a fallback page —</option>
+                  {pages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </>
       )}
