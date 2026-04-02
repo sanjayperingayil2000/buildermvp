@@ -63,11 +63,14 @@ export const addSecureEntryWidget = (editor: Editor) => {
       realValue = realValue.substring(0, 16);
       primaryInput.setAttribute('data-real-value', realValue);
 
-      // Masking Logic: Show first 6, star the rest
+      // Masking Logic: dynamically read data-mask-after if injected via input conditions
+      const rawMaskAfter = container.getAttribute('data-mask-after');
+      const maskAfter = rawMaskAfter ? parseInt(rawMaskAfter, 10) : 6;
+
       let displayValue = realValue;
-      if (realValue.length > 6) {
-        const visiblePart = realValue.substring(0, 6);
-        const maskedPart = '*'.repeat(realValue.length - 6);
+      if (realValue.length > maskAfter) {
+        const visiblePart = realValue.substring(0, maskAfter);
+        const maskedPart = '*'.repeat(realValue.length - maskAfter);
         displayValue = visiblePart + maskedPart;
       }
       primaryInput.value = displayValue;

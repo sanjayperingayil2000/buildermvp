@@ -291,7 +291,7 @@ export default function FlowPage() {
               fontSize: '14px',
             }}
           >
-            Go to Template Builder
+            Go to Template Buildera
           </Link>
         </div>
       ) : (
@@ -418,9 +418,103 @@ export default function FlowPage() {
                 </div>
               </div>
             </Panel>
+
+            <Panel position="bottom-right">
+              <InputConditionsSummary />
+            </Panel>
           </ReactFlow>
         </div>
       )}
     </div>
   );
 }
+
+function InputConditionsSummary() {
+  const inputConditions = useAppStore((s) => s.inputConditions);
+  const pages = useAppStore((s) => s.pages);
+  const inputFieldsByPage = useAppStore((s) => s.inputFieldsByPage);
+
+  const totalRules = inputConditions.reduce(
+    (sum, pc) => sum + pc.conditions.filter((c) => c.enabled).length, 0
+  );
+
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div style={{
+      background: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: 8,
+      fontSize: 11,
+      color: '#94a3b8',
+      minWidth: 180,
+      maxWidth: 260,
+    }}>
+      <div
+        style={{
+          padding: '8px 12px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span>
+          <span style={{ color: '#a78bfa', fontWeight: 700 }}>{totalRules}</span>
+          {' '}input rule{totalRules !== 1 ? 's' : ''} configured
+        </span>
+        <span style={{ color: '#475569' }}>{expanded ? '▲' : '▼'}</span>
+      </div>
+
+      {expanded && (
+        <div style={{ borderTop: '1px solid #334155', padding: '8px 12px', maxHeight: 200, overflowY: 'auto' }}>
+          {inputConditions.length === 0 && (
+            <div style={{ color: '#475569', fontStyle: 'italic' }}>
+              No conditions set. Click ⚙ on an input field row in a page node.
+            </div>
+          )}
+          {inputConditions.map((pc) => {
+            const page = pages.find((p) => p.id === pc.pageId);
+            const fields = inputFieldsByPage[pc.pageId] ?? [];
+            const activeConditions = pc.conditions.filter((c) => c.enabled);
+            
+            if (activeConditions.length === 0) return null;
+            
+            return (
+              <div key={pc.pageId} style={{ marginBottom: 8 }}>
+                <div style={{ fontWeight: 700, color: '#f8fafc', marginBottom: 4 }}>
+                  {page?.name ?? pc.pageId}
+                </div>
+                {activeConditions.map((c) => {
+                  const field = fields.find((f) => f.id === c.fieldId);
+                  return (
+                    <div key={c.id} style={{
+                      display: 'flex',
+                      gap: 6,
+                      alignItems: 'flex-start',
+                      marginBottom: 3,
+                      paddingLeft: 8,
+                    }}>
+                      <span style={{ color: '#a78bfa', flexShrink: 0 }}>·</span>
+                      <span>
+                        <span style={{ color: '#cbd5e1' }}>{field?.label ?? c.fieldId}</span>
+                        {' — '}
+                        <span style={{ color: '#94a3b8' }}>{c.conditionType}</span>
+                        {c.value !== null && (
+                          <span style={{ color: '#7c3aed' }}> = {String(c.value)}</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+

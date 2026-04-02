@@ -14,6 +14,7 @@ export default function PreviewPage() {
   const navMap = useAppStore((s) => s.navMap);
   const activeContext = useAppStore((s) => s.activeContext);
   const setActiveContext = useAppStore((s) => s.setActiveContext);
+  const inputConditions = useAppStore((s) => s.inputConditions);
 
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -161,8 +162,8 @@ export default function PreviewPage() {
   // Build the full HTML document string for the iframe
   const srcDoc = useMemo(() => {
     if (!currentPage) return '';
-    return buildPageRuntime(currentPage, navMap, activeContext);
-  }, [currentPage, navMap, activeContext]);
+    return buildPageRuntime(currentPage, navMap, activeContext, inputConditions);
+  }, [currentPage, navMap, activeContext, inputConditions]);
 
   // Empty state — nothing saved yet
   if (pages.length === 0) {

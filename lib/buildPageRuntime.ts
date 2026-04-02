@@ -1,5 +1,9 @@
-import type { NavMapEntry } from '@/shared/store/useAppStore';
+import type { NavMapEntry, PageInputConfig } from '@/shared/store/useAppStore';
 import { BIN_TO_BANK_ID, BANK_DETAILS_DB } from '@/shared/config/banks';
+import {
+  serializeConditionsForRuntime,
+  INPUT_CONDITION_RUNTIME,
+} from './evaluateInputConditions';
 
 export interface PageDescriptor {
   id: string;
@@ -11,7 +15,8 @@ export interface PageDescriptor {
 export function buildPageRuntime(
   page: PageDescriptor,
   navMap: NavMapEntry[],
-  activeContext: Record<string, unknown> | null = null
+  activeContext: Record<string, unknown> | null = null,
+  inputConditions: PageInputConfig[] = []
 ): string {
   // Build route lookup for this page only
   const routes: Record<string, {
@@ -48,6 +53,11 @@ export function buildPageRuntime(
     .replace(/<body[^>]*>/gi, '')
     .replace(/<\/body>/gi, '')
     .trim();
+
+  // Serialize input conditions for this page
+  const conditionsForPage = serializeConditionsForRuntime(page.id, inputConditions);
+  const conditionsJson = JSON.stringify(conditionsForPage);
+  const binsJson = JSON.stringify(BIN_TO_BANK_ID);
 
   const runtimeScript = `
 <script>
@@ -199,6 +209,18 @@ export function buildPageRuntime(
 </head>
 <body>
 ${bodyContent}
+
+<script>
+  // Injected by buildPageRuntime — input conditions from React Flow config
+  window.__INPUT_CONDITIONS__ = ${conditionsJson};
+  window.__BINS__ = ${binsJson};
+</script>
+
+<script>
+  // Input condition evaluator runtime
+  ${INPUT_CONDITION_RUNTIME}
+</script>
+
 ${runtimeScript}
 </body>
 </html>`;

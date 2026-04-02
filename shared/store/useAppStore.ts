@@ -3,6 +3,43 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { type Node, type Edge } from '@xyflow/react';
 
+// Describes one input field found on a page
+export interface InputFieldDescriptor {
+  id: string;                  // matches the HTML id of the input, e.g. "niw-primary"
+  widgetId: string;            // the data-widget attribute of the parent widget, e.g. "number-input-widget"
+  label: string;               // human-readable name, e.g. "Primary number input"
+  inputType: string;           // HTML input type found in the DOM: "text" | "password" | "number" | "tel"
+  placeholder: string;         // current placeholder text
+  role: 'primary' | 'confirm' | 'generic';  // semantic role detected from element attributes
+}
+
+// One condition rule that applies to an input field
+export interface InputCondition {
+  id: string;                  // unique id for this condition rule, generated on creation
+  fieldId: string;             // matches InputFieldDescriptor.id
+  pageId: string;              // the page this condition belongs to
+  conditionType: InputConditionType;
+  value: string | number | null;   // the threshold or allowed value
+  errorMessage: string;        // shown to the user when the condition fails
+  enabled: boolean;
+}
+
+export type InputConditionType =
+  | 'min_length'           // input must have at least N digits
+  | 'max_length'           // input must have at most N digits
+  | 'exact_length'         // input must be exactly N digits (supports comma-separated: "12,16")
+  | 'allowed_chars'        // regex pattern of allowed characters, e.g. "[0-9]"
+  | 'input_type'           // what the semantic type is: "phone" | "card" | "any"
+  | 'require_bin_match'    // boolean — whether a BIN lookup is required for card numbers
+  | 'require_confirmation' // boolean — whether the confirm field must match the primary
+  | 'mask_after_n_chars';  // mask the input after N visible characters
+
+// The full set of conditions for one page
+export interface PageInputConfig {
+  pageId: string;
+  conditions: InputCondition[];
+}
+
 export interface PageDescriptor {
   id: string;
   name: string;
@@ -53,6 +90,10 @@ interface AppState {
   flowEdges: Edge[];
   navMap: NavMapEntry[];
 
+  // Input field configuration
+  inputFieldsByPage: Record<string, InputFieldDescriptor[]>;  // keyed by pageId
+  inputConditions: PageInputConfig[];
+
   // Phase 2 setters
   setRawJson: (json: Record<string, unknown>) => void;
   setPages: (pages: PageDescriptor[]) => void;
@@ -61,6 +102,11 @@ interface AppState {
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
   setNavMap: (map: NavMapEntry[]) => void;
+
+  // Input field setters
+  setInputFieldsByPage: (map: Record<string, InputFieldDescriptor[]>) => void;
+  setInputConditions: (conditions: PageInputConfig[]) => void;
+  upsertPageInputConfig: (config: PageInputConfig) => void;
 
   // Signal from popup to update local canvas edges
   pendingEdgeUpdate: Edge[] | null;
@@ -79,6 +125,8 @@ export const useAppStore = create<AppState>()(
       flowNodes: [],
       flowEdges: [],
       navMap: [],
+      inputFieldsByPage: {},
+      inputConditions: [],
       pendingEdgeUpdate: null,
 
       setRawJson: (json) => set({ rawJson: json }),
@@ -86,6 +134,15 @@ export const useAppStore = create<AppState>()(
       setFlowNodes: (nodes) => set({ flowNodes: nodes }),
       setFlowEdges: (edges) => set({ flowEdges: edges }),
       setNavMap: (map) => set({ navMap: map }),
+      setInputFieldsByPage: (map) => set({ inputFieldsByPage: map }),
+      setInputConditions: (conditions) => set({ inputConditions: conditions }),
+      upsertPageInputConfig: (config) =>
+        set((state) => {
+          const existing = state.inputConditions.filter(
+            (c) => c.pageId !== config.pageId
+          );
+          return { inputConditions: [...existing, config] };
+        }),
       setPendingEdgeUpdate: (edges) => set({ pendingEdgeUpdate: edges }),
       activeContext: null,
       setActiveContext: (context) => set({ activeContext: context }),
@@ -98,6 +155,8 @@ export const useAppStore = create<AppState>()(
         flowNodes: state.flowNodes,
         flowEdges: state.flowEdges,
         navMap: state.navMap,
+        inputFieldsByPage: state.inputFieldsByPage,
+        inputConditions: state.inputConditions,
       }),
     }
   )

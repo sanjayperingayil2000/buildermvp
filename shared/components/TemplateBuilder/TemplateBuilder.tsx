@@ -5,7 +5,7 @@ import grapesjs, { Editor } from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
 import newsletterPlugin from './index';
 import PagesPanel from './PagesPanel';
-import { extractPagesForFlow } from './extractPagesForFlow';
+import { extractPagesForFlow, extractInputFields } from './extractPagesForFlow';
 import { useAppStore } from '@/shared/store/useAppStore';
 import type { PluginOptions } from '@/shared/models/template-builder-plugin';
 
@@ -197,9 +197,13 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
     useAppStore.getState().setRawJson(rawJson as Record<string, unknown>);
     useAppStore.getState().setPages(pagesForFlow);
 
+    // Extract input fields from each page
+    const inputFields = extractInputFields(editor);
+    useAppStore.getState().setInputFieldsByPage(inputFields);
+
     setHasUnsavedChanges(false);
 
-    console.log('Saved:', { projectData: rawJson, extractedPages: pagesForFlow });
+    console.log('Saved:', { projectData: rawJson, extractedPages: pagesForFlow, inputFields });
   }, []);
 
   const handleLoad = useCallback(() => {
