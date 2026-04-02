@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useAppStore } from '@/shared/store/useAppStore';
 import { buildPageRuntime } from '@/lib/buildPageRuntime';
-import { BANK_DETAILS_DB } from '@/shared/config/banks';
 
 // Mobile frame dimensions — the simulated device screen
 const FRAME_WIDTH = 390;
@@ -13,13 +12,13 @@ const FRAME_HEIGHT = 844;
 export default function PreviewPage() {
   const pages = useAppStore((s) => s.pages);
   const navMap = useAppStore((s) => s.navMap);
+  const activeContext = useAppStore((s) => s.activeContext);
   const setActiveContext = useAppStore((s) => s.setActiveContext);
 
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'warn' | 'error' } | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Set first page as starting point when pages are available
   useEffect(() => {
@@ -28,31 +27,6 @@ export default function PreviewPage() {
       setHistory([pages[0].id]);
     }
   }, [pages, currentPageId]);
-
-  // Dynamic Context DOM Mutation Hook (Task 4)
-  useEffect(() => {
-    const { activeContext } = useAppStore.getState();
-    if (!activeContext || !activeContext.bankId) return;
-
-    const bankData = BANK_DETAILS_DB[activeContext.bankId];
-    if (!bankData) return;
-
-    // We add a tiny delay to ensure the iframe has mounted its new content
-    const timeoutId = setTimeout(() => {
-      const doc = iframeRef.current?.contentDocument;
-      if (!doc) return;
-
-      const nameEl = doc.querySelector('[data-dynamic="bank-name"]');
-      const logoEl = doc.querySelector('[data-dynamic="bank-logo"]');
-      const descEl = doc.querySelector('[data-dynamic="bank-desc"]');
-
-      if (nameEl) nameEl.textContent = bankData.name;
-      if (logoEl) logoEl.setAttribute('src', bankData.logo);
-      if (descEl) descEl.textContent = bankData.desc;
-    }, 50);
-
-    return () => clearTimeout(timeoutId);
-  }, [currentPageId, pages]);
 
   // Navigate to a page by id
   const navigate = useCallback(
@@ -187,8 +161,8 @@ export default function PreviewPage() {
   // Build the full HTML document string for the iframe
   const srcDoc = useMemo(() => {
     if (!currentPage) return '';
-    return buildPageRuntime(currentPage, navMap);
-  }, [currentPage, navMap]);
+    return buildPageRuntime(currentPage, navMap, activeContext);
+  }, [currentPage, navMap, activeContext]);
 
   // Empty state — nothing saved yet
   if (pages.length === 0) {
@@ -443,7 +417,6 @@ export default function PreviewPage() {
             <MobileFrame
               srcDoc={srcDoc}
               pageKey={currentPageId ?? 'none'}
-              iframeRef={iframeRef}
             />
           ) : (
             <div style={{ color: '#475569', fontSize: 14 }}>
@@ -461,39 +434,14 @@ export default function PreviewPage() {
 interface MobileFrameProps {
   srcDoc: string;
   pageKey: string;
-  iframeRef: React.RefObject<HTMLIFrameElement | null>;
 }
 
-function MobileFrame({ srcDoc, pageKey, iframeRef }: MobileFrameProps) {
+function MobileFrame({ srcDoc, pageKey }: MobileFrameProps) {
   // Scale the 390×844 frame to fit comfortably in the viewport.
   // We target a displayed height of ~70vh.
   const displayHeight = Math.min(700, typeof window !== 'undefined' ? window.innerHeight * 0.78 : 700);
   const scale = displayHeight / FRAME_HEIGHT;
   const displayWidth = FRAME_WIDTH * scale;
-
-  const handleIframeLoad = () => {
-    const context = useAppStore.getState().activeContext;
-    if (!context || !context.bankId) return;
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-
-    const details = BANK_DETAILS_DB[context.bankId];
-    if (details) {
-      doc.querySelectorAll('[data-dynamic="bank-name"]').forEach(el => {
-        (el as HTMLElement).innerText = details.name;
-      });
-      doc.querySelectorAll('[data-dynamic="bank-logo"]').forEach(el => {
-        if (el.tagName.toLowerCase() === 'img') {
-          (el as HTMLImageElement).src = details.logo;
-        } else {
-          (el as HTMLElement).innerText = details.name;
-        }
-      });
-      doc.querySelectorAll('[data-dynamic="bank-desc"]').forEach(el => {
-        (el as HTMLElement).innerText = details.desc;
-      });
-    }
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
@@ -550,9 +498,7 @@ function MobileFrame({ srcDoc, pageKey, iframeRef }: MobileFrameProps) {
           >
             <iframe
               key={pageKey}
-              ref={iframeRef}
               srcDoc={srcDoc}
-              onLoad={handleIframeLoad}
               style={{
                 width: FRAME_WIDTH,
                 height: FRAME_HEIGHT,

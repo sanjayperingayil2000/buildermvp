@@ -1,5 +1,5 @@
 import type { NavMapEntry } from '@/shared/store/useAppStore';
-import { BIN_TO_BANK_ID } from '@/shared/config/banks';
+import { BIN_TO_BANK_ID, BANK_DETAILS_DB } from '@/shared/config/banks';
 
 export interface PageDescriptor {
   id: string;
@@ -10,7 +10,8 @@ export interface PageDescriptor {
 
 export function buildPageRuntime(
   page: PageDescriptor,
-  navMap: NavMapEntry[]
+  navMap: NavMapEntry[],
+  activeContext: Record<string, unknown> | null = null
 ): string {
   // Build route lookup for this page only
   const routes: Record<string, {
@@ -34,6 +35,11 @@ export function buildPageRuntime(
   });
 
   const routesJson = JSON.stringify(routes);
+  const bankDetailsJson = JSON.stringify(BANK_DETAILS_DB);
+  const initialBankId =
+    activeContext && typeof activeContext.bankId === 'string'
+      ? activeContext.bankId
+      : null;
 
   const bodyContent = page.html
     .replace(/<html[^>]*>/gi, '')
@@ -48,9 +54,34 @@ export function buildPageRuntime(
 (function () {
   var routes = ${routesJson};
   var binToBankId = ${JSON.stringify(BIN_TO_BANK_ID)};
+  var bankDetailsDb = ${bankDetailsJson};
+  var initialBankId = ${JSON.stringify(initialBankId)};
 
   function navigate(targetPageId) {
     window.parent.postMessage({ type: 'preview:navigate', to: targetPageId }, '*');
+  }
+
+  function applyBankContext(bankId) {
+    if (!bankId || !bankDetailsDb[bankId]) return;
+    var details = bankDetailsDb[bankId];
+
+    var nameNodes = document.querySelectorAll('[data-dynamic="bank-name"]');
+    var logoNodes = document.querySelectorAll('[data-dynamic="bank-logo"]');
+    var descNodes = document.querySelectorAll('[data-dynamic="bank-desc"]');
+
+    nameNodes.forEach(function (el) {
+      el.textContent = details.name;
+    });
+    logoNodes.forEach(function (el) {
+      if (el.tagName.toLowerCase() === 'img') {
+        el.setAttribute('src', details.logo);
+      } else {
+        el.textContent = details.name;
+      }
+    });
+    descNodes.forEach(function (el) {
+      el.textContent = details.desc;
+    });
   }
 
   function handleAction(el, actionId) {
@@ -141,6 +172,10 @@ export function buildPageRuntime(
     });
 
     // Context links are handled via normal action routing.
+
+    if (initialBankId) {
+      applyBankContext(initialBankId);
+    }
   }
 
   if (document.readyState === 'loading') {

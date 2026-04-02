@@ -1,4 +1,12 @@
 import type { Editor } from 'grapesjs';
+import { BANKS } from '@/shared/config/banks';
+
+const BANK_LABEL_BY_BIN = BANKS.reduce<Record<string, string>>((acc, bank) => {
+  bank.bins.forEach((bin) => {
+    acc[bin] = bank.name;
+  });
+  return acc;
+}, {});
 
 export const addSecureEntryWidget = (editor: Editor) => {
   const domComps = editor.DomComponents;
@@ -17,14 +25,9 @@ export const addSecureEntryWidget = (editor: Editor) => {
 
     // Real value storage (since we mask the visible input)
     let realValue = "";
-
-    const binDatabase: Record<string, string[]> = {
-      "BBVA": ["415231", "455511", "491566", "557910"],
-      "Santander": ["491573", "549140", "553011"],
-      "Banorte": ["402766", "416916", "476684", "525678"],
-      "Citibanamex": ["416393", "446131", "520416", "541203"],
-      "HSBC": ["421316", "441221", "524021"]
-    };
+    const binToBankLabel: Record<string, string> = JSON.parse(
+      container.getAttribute('data-bin-label-map') || '{}'
+    );
 
     // Handle Clear Buttons
     clearBtns.forEach((btn: any) => {
@@ -73,12 +76,10 @@ export const addSecureEntryWidget = (editor: Editor) => {
       bankLabel.innerText = '';
       if (realValue.length >= 6) {
         const bin = realValue.substring(0, 6);
-        for (const [bank, bins] of Object.entries(binDatabase)) {
-          if (bins.includes(bin)) {
-            bankLabel.innerText = `Recognized: ${bank}`;
-            bankLabel.style.color = '#10b981'; // Green
-            break;
-          }
+        const bankLabelName = binToBankLabel[bin];
+        if (bankLabelName) {
+          bankLabel.innerText = `Recognized: ${bankLabelName}`;
+          bankLabel.style.color = '#10b981'; // Green
         }
       }
     });
@@ -110,7 +111,10 @@ export const addSecureEntryWidget = (editor: Editor) => {
         script,
         tagName: 'div',
         classes: ['secure-widget-container'],
-        attributes: { 'data-widget': 'secure-entry' },
+        attributes: {
+          'data-widget': 'secure-entry',
+          'data-bin-label-map': JSON.stringify(BANK_LABEL_BY_BIN),
+        },
         components: `
           <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background: white;">
             
