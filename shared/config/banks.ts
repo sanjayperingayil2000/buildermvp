@@ -11,7 +11,7 @@ export const BANKS: BankDetails[] = [
   {
     id: 'bbva',
     name: 'BBVA Bancomer',
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/e/e0/BBVA_2019.svg',
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/9/98/BBVA_logo_2025.svg',
     desc: 'Welcome to BBVA secure portal.',
     bins: ['415231', '455511', '491566', '557910'],
     shortLabel: 'BBVA',
@@ -27,7 +27,7 @@ export const BANKS: BankDetails[] = [
   {
     id: 'banorte',
     name: 'Banorte',
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/3/30/Banorte_logo.svg',
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Logo_de_Banorte.svg',
     desc: 'Your trusted Mexican bank portal.',
     bins: ['402766', '416916', '476684', '525678'],
     shortLabel: 'BNT',
