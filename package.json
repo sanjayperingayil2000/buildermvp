@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@material/web": "^2.4.1",
     "@xyflow/react": "^12.10.1",
     "grapesjs": "^0.21.12",
     "juice": "^11.1.1",

@@ -2,6 +2,43 @@ import type { Editor, BlockProperties } from 'grapesjs';
 import { PluginOptions } from '@/shared/models/template-builder-plugin';
 
 export default function (editor: Editor, opts: Required<PluginOptions>) {
+
+  editor.on('canvas:load', () => {
+    const doc = editor.Canvas.getDocument();
+
+    // 1. Inject Tailwind config BEFORE the CDN script (disables preflight reset)
+    if (!doc.querySelector('#tailwind-config')) {
+      const config = doc.createElement('script');
+      config.id = 'tailwind-config';
+      config.textContent = `
+      tailwind = {
+        config: {
+          corePlugins: { preflight: false }  // ← prevents style reset
+        }
+      }
+    `;
+      doc.head.appendChild(config);
+    }
+
+    // 2. Inject Tailwind CDN
+    if (!doc.querySelector('#tailwind-script')) {
+      const script = doc.createElement('script');
+      script.id = 'tailwind-script';
+      script.src = 'https://cdn.tailwindcss.com';
+      doc.head.appendChild(script);
+    }
+
+    // 3. Inject DaisyUI AFTER Tailwind (so it wins specificity)
+    if (!doc.querySelector('#daisyui-css')) {
+      const link = doc.createElement('link');
+      link.id = 'daisyui-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css';
+      doc.head.appendChild(link);
+    }
+  });
+
+
   const bm = editor.Blocks;
   let tableStyleStr = '';
   let cellStyleStr = '';
@@ -88,7 +125,7 @@ export default function (editor: Editor, opts: Required<PluginOptions>) {
     media: `<svg viewBox="0 0 24 24">
         <path fill="currentColor" d="M20 20.5C20 21.3 19.3 22 18.5 22H13C12.6 22 12.3 21.9 12 21.6L8 17.4L8.7 16.6C8.9 16.4 9.2 16.3 9.5 16.3H9.7L12 18V9C12 8.4 12.4 8 13 8S14 8.4 14 9V13.5L15.2 13.6L19.1 15.8C19.6 16 20 16.6 20 17.1V20.5M20 2H4C2.9 2 2 2.9 2 4V12C2 13.1 2.9 14 4 14H8V12H4V4H20V12H18V14H20C21.1 14 22 13.1 22 12V4C22 2.9 21.1 2 20 2Z" />
     </svg>`,
-    content: '<button class="button">Button</button>',
+    content: '<button class="btn btn-success">Success</button>',
   });
 
   addBlock('divider', {

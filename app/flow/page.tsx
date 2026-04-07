@@ -113,6 +113,8 @@ export default function FlowPage() {
   const pendingEdgeUpdate = useAppStore((s) => s.pendingEdgeUpdate);
   const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
 
+const storeEdges = useAppStore((s) => s.flowEdges);
+
   const nodeTypes = useMemo(() => ({ pageNode: PageNode }), []);
   const edgeTypes = useMemo(() => ({ deletable: DeletableEdge }), []);
 

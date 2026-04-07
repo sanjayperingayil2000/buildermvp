@@ -76,10 +76,16 @@ export default function PreviewPage() {
         actionId?: string;
         contextId?: string;
         realValue?: string;
+        fuelType?: string;
       };
 
       if (msg.type === 'preview:navigate' && msg.to) {
-        setStatusMessage(null);
+        if (msg.fuelType) {
+          setStatusMessage({ text: `Fuel selected: ${msg.fuelType}`, type: 'info' });
+          setTimeout(() => setStatusMessage(null), 2000);
+        } else {
+          setStatusMessage(null);
+        }
         navigate(msg.to);
       } else if (msg.type === 'preview:api-start') {
         setIsApiLoading(true);

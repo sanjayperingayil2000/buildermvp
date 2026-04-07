@@ -9,6 +9,135 @@ import { extractPagesForFlow } from './extractPagesForFlow';
 import { useAppStore } from '@/shared/store/useAppStore';
 import type { PluginOptions } from '@/shared/models/template-builder-plugin';
 
+const mockFlutterJson = {
+  "manifestVersion": "1.0.0",
+  "generatedAt": "2026-04-07T10:48:45Z",
+  "generatedBy": "figma-to-flutter-architect",
+  "appMeta": {
+    "appName": "Petro7 AutoPago",
+    "packageName": "com.petro7.autopago",
+    "figmaFileId": "extracted_from_png",
+    "figmaFileName": "Home_Screen_Design",
+    "totalPages": 1,
+    "entryPage": "welcome_page"
+  },
+  "theme": {
+    "colorTokens": {
+      "primary": "#FF266B54",
+      "primaryVariant": "#FF1A4F3D",
+      "secondary": "#FFE05030",
+      "background": "#FF266B54",
+      "surface": "#FFFFFFFF",
+      "error": "#FFB00020",
+      "onPrimary": "#FFFFFFFF",
+      "onBackground": "#FFFFFFFF",
+      "onSurface": "#FF266B54",
+      "textPrimary": "#FFFFFFFF",
+      "textSecondary": "#FFD0D0D0",
+      "divider": "#FFBDBDBD"
+    },
+    "typography": {
+      "fontFamily": "Roboto",
+      "h1": { "size": 96, "weight": 300, "letterSpacing": -1.5 },
+      "h2": { "size": 60, "weight": 300, "letterSpacing": -0.5 },
+      "body1": { "size": 16, "weight": 400, "letterSpacing": 0.5 },
+      "body2": { "size": 14, "weight": 400, "letterSpacing": 0.25 },
+      "button": { "size": 16, "weight": 600, "letterSpacing": 1.0 },
+      "caption": { "size": 12, "weight": 400, "letterSpacing": 0.4 }
+    },
+    "borderRadius": {
+      "small": 4,
+      "medium": 8,
+      "large": 16,
+      "pill": 100
+    },
+    "spacing": {
+      "xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32, "xxl": 48
+    }
+  },
+  "pages": [
+    {
+      "pageId": "welcome_page",
+      "pageTitle": "Welcome Page",
+      "screenType": "Splash",
+      "isEntryPoint": true,
+      "requiresAuth": false,
+      "dartClassName": "WelcomePage",
+      "dartFileName": "welcome_page.dart",
+      "widgetType": "StatelessWidget",
+      "layoutRoot": "Scaffold",
+      "widgets": [
+        {
+          "widgetId": "welcome_text",
+          "type": "Text",
+          "label": "Welcome Greeting",
+          "properties": {
+            "text": "Bienvenido a",
+            "fontSize": 28,
+            "color": "#FFFFFFFF"
+          }
+        },
+        {
+          "widgetId": "petro7_logo",
+          "type": "Image",
+          "label": "Petro 7 Logo",
+          "properties": {
+            "height": 80,
+            "assetPath": "assets/images/Logo-white.png"
+          }
+        },
+        {
+          "widgetId": "autopago_logo",
+          "type": "Image",
+          "label": "AutoPago Logo",
+          "properties": {
+            "height": 60,
+            "assetPath": "assets/images/AutoPago_Logo.png"
+          }
+        },
+        {
+          "widgetId": "iniciar_button",
+          "type": "ElevatedButton",
+          "label": "Start Button CTA",
+          "properties": {
+            "text": "INICIAR",
+            "backgroundColor": "#FFFFFFFF",
+            "textColor": "#FF266B54",
+            "width": "full"
+          },
+          "navigationTarget": "login_page",
+          "navigationCondition": null
+        }
+      ],
+      "stateFields": [],
+      "conditionalElements": [],
+      "widgetCode": "import 'package:flutter/material.dart';\n\nclass WelcomePage extends StatelessWidget {\n  const WelcomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      backgroundColor: const Color(0xFF266B54),\n      body: SafeArea(\n        child: Center(\n          child: Padding(\n            padding: const EdgeInsets.symmetric(horizontal: 40.0),\n            child: Column(\n              mainAxisAlignment: MainAxisAlignment.center,\n              crossAxisAlignment: CrossAxisAlignment.center,\n              children: [\n                const Text(\n                  'Bienvenido a',\n                  style: TextStyle(\n                    color: Colors.white,\n                    fontSize: 28,\n                    fontWeight: FontWeight.w600,\n                  ),\n                ),\n                const SizedBox(height: 40),\n                Image.asset(\n                  'assets/images/Logo-white.png',\n                  height: 80,\n                  fit: BoxFit.contain,\n                ),\n                const SizedBox(height: 24),\n                Image.asset(\n                  'assets/images/AutoPago_Logo.png',\n                  height: 60,\n                  fit: BoxFit.contain,\n                ),\n                const SizedBox(height: 64),\n                SizedBox(\n                  width: double.infinity,\n                  height: 48,\n                  child: ElevatedButton(\n                    onPressed: () {\n                      // NAV: -> login_page\n                    },\n                    style: ElevatedButton.styleFrom(\n                      backgroundColor: Colors.white,\n                      foregroundColor: const Color(0xFF266B54),\n                      elevation: 0,\n                      shape: RoundedRectangleBorder(\n                        borderRadius: BorderRadius.circular(8),\n                      ),\n                    ),\n                    child: const Text(\n                      'INICIAR',\n                      style: TextStyle(\n                        fontSize: 16,\n                        fontWeight: FontWeight.w600,\n                        letterSpacing: 1.0,\n                      ),\n                    ),\n                  ),\n                ),\n              ],\n            ),\n          ),\n        ),\n      ),\n    );\n  }\n}",
+      "reactFlowNode": {
+        "nodeId": "welcome_page",
+        "position": { "x": 0, "y": 0 },
+        "dimensions": { "width": 180, "height": 80 },
+        "label": "Welcome",
+        "type": "pageNode"
+      }
+    }
+  ],
+  "navigationGraph": [
+    {
+      "edgeId": "nav_001",
+      "sourcePageId": "welcome_page",
+      "targetPageId": "login_page",
+      "triggerWidget": "iniciar_button",
+      "triggerType": "onTap",
+      "transitionType": "slideLeft",
+      "transitionDuration": 300,
+      "condition": null,
+      "label": "Navigate to Login/Home"
+    }
+  ],
+  "conditionalNavigation": [],
+  "globalConditions": {}
+}
+
 interface TemplateBuilderProps {
   pluginOptions?: Partial<PluginOptions>;
 }
@@ -202,6 +331,21 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
     console.log('Saved:', { projectData: rawJson, extractedPages: pagesForFlow });
   }, []);
 
+// ---------------------------------------------------------
+  // NEW: FLUTTER JSON LOAD & EXTRACT
+  // ---------------------------------------------------------
+  const handleLoadFlutter = useCallback(() => {
+    // 2. Pass the Flutter JSON directly into your updated extractor function
+    const pagesForFlow = extractPagesForFlow(mockFlutterJson);
+    
+    // 3. Push the results directly to the store
+    useAppStore.getState().setPages(pagesForFlow);
+    useAppStore.getState().setRawJson(mockFlutterJson);
+
+    alert('Flutter JSON successfully loaded into React Flow!');
+    console.log('Extracted Flutter Pages:', pagesForFlow);
+  }, []);
+
   const handleLoad = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) {
@@ -243,6 +387,24 @@ export default function TemplateBuilder({ pluginOptions }: TemplateBuilderProps)
             Unsaved changes
           </span>
         )}
+
+        {/* 4. Add the trigger button to your UI */}
+        <button
+          onClick={handleLoadFlutter}
+          style={{
+            padding: '8px 20px',
+            backgroundColor: '#8b5cf6', // Purple to stand out
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '6px',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+          }}
+        >
+          Push Flutter JSON to Flow
+        </button>
+
         <button
           onClick={handleLoad}
           style={{

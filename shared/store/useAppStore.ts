@@ -6,8 +6,7 @@ import { type Node, type Edge } from '@xyflow/react';
 export interface PageDescriptor {
   id: string;
   name: string;
-  html: string;
-  css: string;
+  code: string; // ✨ Replsaced html and css with code
   actionElements: ActionElement[];
 }
 
@@ -82,7 +81,32 @@ export const useAppStore = create<AppState>()(
       pendingEdgeUpdate: null,
 
       setRawJson: (json) => set({ rawJson: json }),
-      setPages: (pages) => set({ pages }),
+      // ✨ THE PURGE LOGIC ✨
+      setPages: (newPages) => set((state) => {
+        // 1. Create a quick lookup Set of all valid page IDs that still exist
+        const validPageIds = new Set(newPages.map((p) => p.id));
+
+        // 2. Purge flowNodes: Keep only nodes whose ID is in the valid pages
+        const nextNodes = state.flowNodes.filter((node) => validPageIds.has(node.id));
+
+        // 3. Purge flowEdges: Keep only edges where BOTH source and target still exist
+        const nextEdges = state.flowEdges.filter((edge) =>
+          validPageIds.has(edge.source) && validPageIds.has(edge.target)
+        );
+
+        // 4. Purge navMap: Keep only routes where BOTH source and target still exist
+        const nextNavMap = state.navMap.filter((entry) =>
+          validPageIds.has(entry.sourcePageId) && validPageIds.has(entry.targetPageId)
+        );
+
+        // Return the scrubbed state
+        return {
+          pages: newPages,
+          flowNodes: nextNodes,
+          flowEdges: nextEdges,
+          navMap: nextNavMap
+        };
+      }),
       setFlowNodes: (nodes) => set({ flowNodes: nodes }),
       setFlowEdges: (edges) => set({ flowEdges: edges }),
       setNavMap: (map) => set({ navMap: map }),

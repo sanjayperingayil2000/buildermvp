@@ -6,8 +6,12 @@ import loadPanels from './panels';
 import loadStyles from './styles';
 
 import { addSecureEntryWidget } from './secureEntryWidget';
+import { addTopHeaderWidget } from './topHeaderWidget';
+import { addFuelCardWidget } from './fuelCardWidget';
+import { addNavbarWidget } from './navbarWidget';
 import { bankListWidgetPlugin } from './bankListWidget';
 import { dynamicBankDetailsWidgetPlugin } from './dynamicBankDetailsWidget';
+import { addFuelAmountWidget } from './fuelAmountWidget';
 
 const plugin: Plugin<PluginOptions> = (editor, opts: Partial<PluginOptions> = {}) => {
   let config = editor.getConfig();
@@ -86,6 +90,10 @@ const plugin: Plugin<PluginOptions> = (editor, opts: Partial<PluginOptions> = {}
   loadPanels(editor, options);
   loadStyles(editor, options);
   addSecureEntryWidget(editor);
+  addTopHeaderWidget(editor);
+  addFuelCardWidget(editor);
+  addFuelAmountWidget(editor);
+  addNavbarWidget(editor);
   bankListWidgetPlugin(editor, {});
   dynamicBankDetailsWidgetPlugin(editor, {});
 };

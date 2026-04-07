@@ -57,8 +57,10 @@ export function buildPageRuntime(
   var bankDetailsDb = ${bankDetailsJson};
   var initialBankId = ${JSON.stringify(initialBankId)};
 
-  function navigate(targetPageId) {
-    window.parent.postMessage({ type: 'preview:navigate', to: targetPageId }, '*');
+  function navigate(targetPageId, extra) {
+    var payload = { type: 'preview:navigate', to: targetPageId };
+    if (extra && extra.fuelType) payload.fuelType = extra.fuelType;
+    window.parent.postMessage(payload, '*');
   }
 
   function applyBankContext(bankId) {
@@ -125,7 +127,8 @@ export function buildPageRuntime(
       if (bankId) {
         window.parent.postMessage({ type: 'preview:context-link-click', actionId: actionId, contextId: bankId }, '*');
       }
-      navigate(route.targetPageId);
+      var fuelType = el ? el.getAttribute('data-fuel-type') : null;
+      navigate(route.targetPageId, { fuelType: fuelType });
 
     } else if (route.actionType === 'api-call' && route.apiEndpoint) {
       window.parent.postMessage({ type: 'preview:api-start' }, '*');
