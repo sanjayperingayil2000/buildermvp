@@ -29,6 +29,7 @@ import {
   type NavMapEntry,
   type EdgeAction,
 } from '@/shared/store/useAppStore';
+import { flowToOutputJson, downloadOutputJson } from '@/lib/flowToOutputJson';
 
 function computeDefaultPosition(page: PageDescriptor, allPages: PageDescriptor[]) {
   const ITEMS_PER_ROW = 3;
@@ -108,7 +109,7 @@ function computeNodes(
   }));
 }
 
-export default function FlowPage() {
+export default function FlowEditorPage() {
   const pages = useAppStore((s) => s.pages);
   const pendingEdgeUpdate = useAppStore((s) => s.pendingEdgeUpdate);
   const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
@@ -256,6 +257,11 @@ const storeEdges = useAppStore((s) => s.flowEdges);
     window.alert('Logic saved!');
   }, [nodes, edges, pages]);
 
+  const handleDownloadJson = useCallback(() => {
+    const output = flowToOutputJson(nodes, edges);
+    downloadOutputJson(output);
+  }, [nodes, edges]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <AppHeader />
@@ -277,10 +283,10 @@ const storeEdges = useAppStore((s) => s.flowEdges);
           }}
         >
           <p style={{ margin: 0, maxWidth: '420px', lineHeight: 1.6 }}>
-            No pages found. Go to Template Builder, design your pages, and click Save.
+            No screens loaded. Import a manifest JSON to get started.
           </p>
           <Link
-            href="/builder"
+            href="/import"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -293,39 +299,62 @@ const storeEdges = useAppStore((s) => s.flowEdges);
               fontSize: '14px',
             }}
           >
-            Go to Template Builder
+            Go to Import
           </Link>
         </div>
       ) : (
         <div style={{ flex: 1, position: 'relative' }}>
-          {/* Save Logic toolbar */}
+          {/* Toolbar */}
           <div
             style={{
               position: 'absolute',
               top: 12,
               right: 12,
               zIndex: 5,
+              display: 'flex',
+              gap: 8,
+              alignItems: 'flex-start',
             }}
           >
             <button
-              onClick={handleSaveLogic}
+              id="download-json-btn"
+              onClick={handleDownloadJson}
               style={{
                 padding: '8px 20px',
-                backgroundColor: '#35d7bb',
-                color: '#1e1e2e',
+                backgroundColor: '#6366f1',
+                color: '#ffffff',
                 border: 'none',
                 borderRadius: '6px',
                 fontWeight: 600,
                 fontSize: '14px',
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                transition: 'background 0.15s',
               }}
             >
-              Save Logic
+              ↓ Download JSON
             </button>
-            <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6, textAlign: 'right' }}>
-              Click an edge to select it, then press Delete — or hover the edge to reveal the × button
-            </span>
+            <div>
+              <button
+                onClick={handleSaveLogic}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: '#35d7bb',
+                  color: '#1e1e2e',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                }}
+              >
+                Save Logic
+              </button>
+              <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6, textAlign: 'right' }}>
+                Click an edge to select it, then press Delete — or hover the edge to reveal the × button
+              </span>
+            </div>
           </div>
 
           <ReactFlow

@@ -6,7 +6,6 @@ import { type Node, type Edge } from '@xyflow/react';
 export interface PageDescriptor {
   id: string;
   name: string;
-  code: string; // ✨ Replsaced html and css with code
   actionElements: ActionElement[];
 }
 
@@ -43,20 +42,16 @@ export interface NavMapEntry {
 }
 
 interface AppState {
-  // Phase 2 outputs — set by GrapeJS builder
-  rawJson: Record<string, unknown> | null;
+  // Set by manifest import
   pages: PageDescriptor[];
 
-  // Phase 3 outputs — set by Logic Builder
+  // Set by Logic Builder (React Flow canvas)
   flowNodes: Node[];
   flowEdges: Edge[];
   navMap: NavMapEntry[];
 
-  // Phase 2 setters
-  setRawJson: (json: Record<string, unknown>) => void;
+  // Setters
   setPages: (pages: PageDescriptor[]) => void;
-
-  // Phase 3 setters
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
   setNavMap: (map: NavMapEntry[]) => void;
@@ -64,23 +59,17 @@ interface AppState {
   // Signal from popup to update local canvas edges
   pendingEdgeUpdate: Edge[] | null;
   setPendingEdgeUpdate: (edges: Edge[] | null) => void;
-
-  // Runtime Context Passing
-  activeContext: Record<string, any> | null;
-  setActiveContext: (context: Record<string, any> | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      rawJson: null,
       pages: [],
       flowNodes: [],
       flowEdges: [],
       navMap: [],
       pendingEdgeUpdate: null,
 
-      setRawJson: (json) => set({ rawJson: json }),
       // ✨ THE PURGE LOGIC ✨
       setPages: (newPages) => set((state) => {
         // 1. Create a quick lookup Set of all valid page IDs that still exist
@@ -111,13 +100,10 @@ export const useAppStore = create<AppState>()(
       setFlowEdges: (edges) => set({ flowEdges: edges }),
       setNavMap: (map) => set({ navMap: map }),
       setPendingEdgeUpdate: (edges) => set({ pendingEdgeUpdate: edges }),
-      activeContext: null,
-      setActiveContext: (context) => set({ activeContext: context }),
     }),
     {
       name: 'kiosk-builder-store',
       partialize: (state) => ({
-        rawJson: state.rawJson,
         pages: state.pages,
         flowNodes: state.flowNodes,
         flowEdges: state.flowEdges,

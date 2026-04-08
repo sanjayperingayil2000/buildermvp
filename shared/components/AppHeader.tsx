@@ -24,12 +24,12 @@ export default function AppHeader() {
           letterSpacing: '0.5px',
         }}
       >
-        Kiosk Builder
+        Kiosk Flow Editor
       </span>
 
       <nav style={{ display: 'flex', gap: '20px' }}>
         <Link
-          href="/builder"
+          href="/import"
           style={{
             color: '#dae5e6',
             textDecoration: 'none',
@@ -40,10 +40,10 @@ export default function AppHeader() {
             transition: 'background 0.15s',
           }}
         >
-          Template Builder
+          Import Manifest
         </Link>
         <Link
-          href="/flow"
+          href="/flow-editor"
           style={{
             color: '#dae5e6',
             textDecoration: 'none',
@@ -54,21 +54,7 @@ export default function AppHeader() {
             transition: 'background 0.15s',
           }}
         >
-          Logic Builder
-        </Link>
-        <Link
-          href="/preview"
-          style={{
-            color: '#dae5e6',
-            textDecoration: 'none',
-            fontSize: '14px',
-            fontWeight: 500,
-            padding: '6px 12px',
-            borderRadius: '4px',
-            transition: 'background 0.15s',
-          }}
-        >
-          Preview
+          Flow Editor
         </Link>
       </nav>
     </header>
