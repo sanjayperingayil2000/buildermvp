@@ -6,7 +6,8 @@
  */
 
 import { type Node, type Edge } from '@xyflow/react';
-import type { OutputJson, OutputNavigation, ManifestScreen } from '@/types/manifest';
+import type { OutputJson, OutputNavigation, OutputPage, OutputElement } from '@/types/manifest';
+import type { PageDescriptor } from '@/shared/store/useAppStore';
 
 /**
  * Convert React Flow nodes and edges into the output JSON schema.
@@ -22,31 +23,37 @@ import type { OutputJson, OutputNavigation, ManifestScreen } from '@/types/manif
  * ```
  */
 export function flowToOutputJson(nodes: Node[], edges: Edge[]): OutputJson {
-  // ── Map nodes → screens ──────────────────────────────────────────
-  const screens: ManifestScreen[] = nodes.map((node) => {
-    const page = node.data?.page as
-      | { id: string; name: string; type?: string; meta?: Record<string, unknown> }
-      | undefined;
+  // ── Map nodes → pages & elements ───────────────────────────────
+  const pages: OutputPage[] = nodes.map((node) => {
+    const page = node.data?.page as PageDescriptor | undefined;
+
+    const elements: OutputElement[] = (page?.actionElements || []).map((el) => {
+      const isInput = el.elementType === 'input';
+      return {
+        id: el.id,
+        name: el.label || el.id,
+        type: (el.elementType || 'button') as 'button' | 'link' | 'input',
+        ...(isInput && el.validations ? { validations: el.validations } : {})
+      };
+    });
 
     return {
       id: page?.id ?? node.id,
       name: page?.name ?? node.id,
-      type: page?.type ?? 'screen',
-      meta: page?.meta ?? {},
+      elements,
     };
   });
 
   // ── Map edges → navigations ──────────────────────────────────────
   const navigations: OutputNavigation[] = edges.map((edge) => ({
-    from: edge.source,
-    to: edge.target,
+    fromElementId: edge.sourceHandle ?? edge.source,
+    toPageId: edge.target,
     condition: (edge.data as Record<string, unknown>)?.condition as string | null ?? null,
-    edgeType: edge.type ?? 'default',
   }));
 
   return {
     generatedAt: new Date().toISOString(),
-    screens,
+    pages,
     navigations,
   };
 }

@@ -144,6 +144,10 @@ function ActionRow({
   const displayLabel =
     element.label && element.label !== element.id
       ? element.label
+      : element.elementType === 'input'
+      ? 'Input Field'
+      : element.elementType === 'link'
+      ? 'Link'
       : 'Button';
 
   return (
@@ -294,6 +298,11 @@ function ActionConfigPopup({
   );
   const [fallbackPageId, setFallbackPageId] = useState<string>(element.fallbackPageId || '');
 
+  // Validation states specifically for input fields
+  const [maxLength, setMaxLength] = useState<number | ''>(element.validations?.maxLength ?? '');
+  const [numberOnly, setNumberOnly] = useState<boolean>(element.validations?.numberOnly ?? false);
+  const [errorMessage, setErrorMessage] = useState<string>(element.validations?.errorMessage ?? '');
+
   const handleActionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newVal = e.target.value;
     setActionType(newVal);
@@ -330,17 +339,32 @@ function ActionConfigPopup({
       ...page,
       actionElements: page.actionElements.map((el) => {
         const isAdvanced = actionType === 'api-call' || actionType === 'secure_entry_routing';
-        return el.id === element.id
-          ? {
-              ...el,
-              actionType,
-              apiEndpoint: isAdvanced ? apiEndpoint || null : null,
-              method: isAdvanced ? method : 'POST',
-              outcomes: isAdvanced ? outcomes : [],
-              fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
-              navigateTo: null,
-            }
-          : el;
+        if (el.id === element.id) {
+          const baseUpdate = {
+            ...el,
+            actionType: element.elementType === 'input' ? 'navigate' : actionType,
+            apiEndpoint: isAdvanced ? apiEndpoint || null : null,
+            method: isAdvanced ? method : 'POST',
+            outcomes: isAdvanced ? outcomes : [],
+            fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
+            navigateTo: null,
+          };
+          
+          if (element.elementType === 'input') {
+            const validations: ActionElement['validations'] = {};
+            if (maxLength !== '') validations.maxLength = Number(maxLength);
+            if (numberOnly) validations.numberOnly = true;
+            if (errorMessage) validations.errorMessage = errorMessage;
+            
+            return {
+              ...baseUpdate,
+              validations: Object.keys(validations).length > 0 ? validations : undefined,
+            } as ActionElement;
+          }
+          
+          return baseUpdate as ActionElement;
+        }
+        return el;
       }),
     }));
     setPages(updatedPages);
@@ -441,206 +465,255 @@ function ActionConfigPopup({
     >
       {/* Header */}
       <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', marginBottom: 12 }}>
-        Configure: {element.label !== element.id ? element.label : 'Button'}
+        Configure: {element.label !== element.id ? element.label : element.elementType === 'input' ? 'Input Field' : 'Button'}
       </div>
 
-      {/* Action type */}
-      <label style={labelStyle}>Action type</label>
-      <select value={actionType} onChange={handleActionTypeChange} style={inputStyle}>
-        <option value="none">None</option>
-        <option value="navigate">Navigate to page</option>
-        <option value="api-call">API call</option>
-        <option value="secure_entry_routing">Secure Entry Routing</option>
-      </select>
-
-      {/* Navigate hint */}
-      {actionType === 'navigate' && (
-        <div style={{
-          marginTop: 10,
-          fontSize: 11,
-          color: '#64748b',
-          background: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: 6,
-          padding: '8px 10px',
-          lineHeight: 1.6,
-        }}>
-          <strong style={{ color: '#1e40af', display: 'block', marginBottom: 4 }}>
-            How to set navigation:
-          </strong>
-          Close this panel, then drag from the green handle (●) on the right side of this button
-          to the target page node. Only one connection is allowed for navigate actions.
-        </div>
-      )}
-
-      {/* API call fields and Secure Routing */}
-      {(actionType === 'api-call' || actionType === 'secure_entry_routing') && (
+      {element.elementType === 'input' ? (
         <>
-          {/* Method + Endpoint - only shown for api-call */}
-          {actionType === 'api-call' && (
-            <>
-              <label style={labelStyle}>HTTP method</label>
-              <select
-                value={method}
-                onChange={(e) => setMethod(e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE')}
-                style={inputStyle}
-              >
-                <option value="POST">POST</option>
-                <option value="GET">GET</option>
-                <option value="PUT">PUT</option>
-                <option value="DELETE">DELETE</option>
-              </select>
+          <label style={labelStyle}>Max Length</label>
+          <input
+            type="number"
+            value={maxLength}
+            onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : '')}
+            placeholder="e.g. 10"
+            style={inputStyle}
+          />
+          
+          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={numberOnly}
+              onChange={(e) => setNumberOnly(e.target.checked)}
+            />
+            Number Only
+          </label>
 
-              <label style={labelStyle}>API endpoint URL</label>
-              <input
-                type="text"
-                value={apiEndpoint}
-                onChange={(e) => setApiEndpoint(e.target.value)}
-                placeholder="/api/mock-payment or {{station.paymentApi}}"
-                style={inputStyle}
-              />
-            </>
+          <label style={labelStyle}>Error Message</label>
+          <input
+            type="text"
+            value={errorMessage}
+            onChange={(e) => setErrorMessage(e.target.value)}
+            placeholder="e.g. Invalid input"
+            style={inputStyle}
+          />
+          
+          <div style={{
+            marginTop: 10,
+            fontSize: 11,
+            color: '#64748b',
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: 6,
+            padding: '8px 10px',
+            lineHeight: 1.6,
+          }}>
+            <strong style={{ color: '#1e40af', display: 'block', marginBottom: 4 }}>
+              Input Routing
+            </strong>
+            Drag from the green handle (●) to navigate when validation passes/fails.
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Action type */}
+          <label style={labelStyle}>Action type</label>
+          <select value={actionType} onChange={handleActionTypeChange} style={inputStyle}>
+            <option value="none">None</option>
+            <option value="navigate">Navigate to page</option>
+            <option value="api-call">API call</option>
+            <option value="secure_entry_routing">Secure Entry Routing</option>
+          </select>
+
+          {/* Navigate hint */}
+          {actionType === 'navigate' && (
+            <div style={{
+              marginTop: 10,
+              fontSize: 11,
+              color: '#64748b',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: 6,
+              padding: '8px 10px',
+              lineHeight: 1.6,
+            }}>
+              <strong style={{ color: '#1e40af', display: 'block', marginBottom: 4 }}>
+                How to set navigation:
+              </strong>
+              Close this panel, then drag from the green handle (●) on the right side of this button
+              to the target page node. Only one connection is allowed for navigate actions.
+            </div>
           )}
 
-          {/* Outcomes */}
-          <div style={{
-            marginTop: 12,
-            borderTop: '1px solid #f1f5f9',
-            paddingTop: 10,
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 8,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
-                Outcome routes {actionType === 'api-call' ? `(${outcomes.length}/3)` : `(${outcomes.length})`}
-              </span>
-              {outcomes.length < 3 && actionType === 'api-call' && (
-                <button
-                  onClick={addOutcome}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: 11,
-                    borderRadius: 4,
-                    border: '1px solid #3b82f6',
-                    background: 'transparent',
-                    color: '#3b82f6',
-                    cursor: 'pointer',
-                  }}
-                >
-                  + Add
-                </button>
+          {/* API call fields and Secure Routing */}
+          {(actionType === 'api-call' || actionType === 'secure_entry_routing') && (
+            <>
+              {/* Method + Endpoint - only shown for api-call */}
+              {actionType === 'api-call' && (
+                <>
+                  <label style={labelStyle}>HTTP method</label>
+                  <select
+                    value={method}
+                    onChange={(e) => setMethod(e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE')}
+                    style={inputStyle}
+                  >
+                    <option value="POST">POST</option>
+                    <option value="GET">GET</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                  </select>
+
+                  <label style={labelStyle}>API endpoint URL</label>
+                  <input
+                    type="text"
+                    value={apiEndpoint}
+                    onChange={(e) => setApiEndpoint(e.target.value)}
+                    placeholder="/api/mock-payment or {{station.paymentApi}}"
+                    style={inputStyle}
+                  />
+                </>
               )}
-            </div>
 
-            <div style={{
-              fontSize: 10,
-              color: '#94a3b8',
-              marginBottom: 8,
-              lineHeight: 1.5,
-            }}>
-              The API must return JSON with an <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: 3 }}>outcome</code> field.
-              Each rule below maps one outcome value to a page.
-            </div>
-
-            {outcomes.length === 0 && (
-              <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
-                No outcomes yet. Click &quot;+ Add&quot; to define what happens after the API responds.
-              </div>
-            )}
-
-            {outcomes.map((outcome, i) => (
-              <div
-                key={i}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 6,
-                  padding: '8px 10px',
-                  marginBottom: 6,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
-                    Outcome {i + 1}
+              {/* Outcomes */}
+              <div style={{
+                marginTop: 12,
+                borderTop: '1px solid #f1f5f9',
+                paddingTop: 10,
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 8,
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
+                    Outcome routes {actionType === 'api-call' ? `(${outcomes.length}/3)` : `(${outcomes.length})`}
                   </span>
-                  {actionType === 'api-call' && (
+                  {outcomes.length < 3 && actionType === 'api-call' && (
                     <button
-                      onClick={() => removeOutcome(i)}
+                      onClick={addOutcome}
                       style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: '#ef4444',
+                        padding: '2px 8px',
                         fontSize: 11,
-                        padding: 0,
+                        borderRadius: 4,
+                        border: '1px solid #3b82f6',
+                        background: 'transparent',
+                        color: '#3b82f6',
+                        cursor: 'pointer',
                       }}
                     >
-                      Remove
+                      + Add
                     </button>
                   )}
                 </div>
 
-                <label style={{ ...labelStyle, marginTop: 0 }}>Outcome Key =</label>
-                <input
-                  type="text"
-                  value={outcome.outcomeKey}
-                  onChange={(e) => updateOutcome(i, 'outcomeKey', e.target.value)}
-                  placeholder='e.g. "success" or "insufficient_funds"'
-                  style={inputStyle}
-                  disabled={actionType === 'secure_entry_routing'}
-                />
+                <div style={{
+                  fontSize: 10,
+                  color: '#94a3b8',
+                  marginBottom: 8,
+                  lineHeight: 1.5,
+                }}>
+                  The API must return JSON with an <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: 3 }}>outcome</code> field.
+                  Each rule below maps one outcome value to a page.
+                </div>
 
-                <label style={labelStyle}>Navigate to page</label>
-                <select
-                  value={outcome.targetPageId}
-                  onChange={(e) => updateOutcome(i, 'targetPageId', e.target.value)}
-                  style={inputStyle}
-                >
-                  <option value="">— select page —</option>
-                  {pages.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                {outcomes.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
+                    No outcomes yet. Click &quot;+ Add&quot; to define what happens after the API responds.
+                  </div>
+                )}
+
+                {outcomes.map((outcome, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 6,
+                      padding: '8px 10px',
+                      marginBottom: 6,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>
+                        Outcome {i + 1}
+                      </span>
+                      {actionType === 'api-call' && (
+                        <button
+                          onClick={() => removeOutcome(i)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#ef4444',
+                            fontSize: 11,
+                            padding: 0,
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <label style={{ ...labelStyle, marginTop: 0 }}>Outcome Key =</label>
+                    <input
+                      type="text"
+                      value={outcome.outcomeKey}
+                      onChange={(e) => updateOutcome(i, 'outcomeKey', e.target.value)}
+                      placeholder='e.g. "success" or "insufficient_funds"'
+                      style={inputStyle}
+                      disabled={actionType === 'secure_entry_routing'}
+                    />
+
+                    <label style={labelStyle}>Navigate to page</label>
+                    <select
+                      value={outcome.targetPageId}
+                      onChange={(e) => updateOutcome(i, 'targetPageId', e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">— select page —</option>
+                      {pages.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                
+                {/* Fallback Page input exclusively for Secure Entry Routing */}
+                {actionType === 'secure_entry_routing' && (
+                  <div
+                    style={{
+                      background: '#fff1f2',
+                      border: '1px solid #fecdd3',
+                      borderRadius: 6,
+                      padding: '10px',
+                      marginTop: 10,
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#be123c', marginBottom: 6 }}>
+                      Unrecognized Card Fallback Page
+                    </div>
+                    <div style={{ fontSize: 10, color: '#9f1239', marginBottom: 8, lineHeight: 1.4 }}>
+                      If a 16-digit card number is entered but the Mexican BIN is not recognized in the system, the user will be routed here.
+                    </div>
+                    <select
+                      value={fallbackPageId}
+                      onChange={(e) => setFallbackPageId(e.target.value)}
+                      style={{...inputStyle, borderColor: '#fecdd3'}}
+                    >
+                      <option value="">— select a fallback page —</option>
+                      {pages.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-            ))}
-            
-            {/* Fallback Page input exclusively for Secure Entry Routing */}
-            {actionType === 'secure_entry_routing' && (
-              <div
-                style={{
-                  background: '#fff1f2',
-                  border: '1px solid #fecdd3',
-                  borderRadius: 6,
-                  padding: '10px',
-                  marginTop: 10,
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#be123c', marginBottom: 6 }}>
-                  Unrecognized Card Fallback Page
-                </div>
-                <div style={{ fontSize: 10, color: '#9f1239', marginBottom: 8, lineHeight: 1.4 }}>
-                  If a 16-digit card number is entered but the Mexican BIN is not recognized in the system, the user will be routed here.
-                </div>
-                <select
-                  value={fallbackPageId}
-                  onChange={(e) => setFallbackPageId(e.target.value)}
-                  style={{...inputStyle, borderColor: '#fecdd3'}}
-                >
-                  <option value="">— select a fallback page —</option>
-                  {pages.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
+            </>
+          )}
         </>
       )}
 

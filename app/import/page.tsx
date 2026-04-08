@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { validateManifest, parseManifestToFlow } from '@/lib/parseManifestToFlow';
+import { normalizeFlutterManifest } from '@/lib/adapters/flutterManifestAdapter';
 import { useAppStore } from '@/shared/store/useAppStore';
 import type { Manifest } from '@/types/manifest';
 import AppHeader from '@/shared/components/AppHeader';
@@ -41,6 +42,13 @@ export default function ImportPage() {
 
       try {
         parsed = JSON.parse(text);
+        
+        const rawJson = parsed as any;
+        // Basic heuristic for Flutter manifest structure: deeply nested objects with widgets or standard root nodes
+        // Or if user specifically provided platform hints under targetPlatform or flutterNotes
+        if (rawJson.targetPlatform === 'flutter' || rawJson.flutterNotes || (rawJson.pages && typeof rawJson.pages[0] === 'object' && ('widgets' in rawJson.pages[0] || 'children' in rawJson.pages[0] || 'child' in rawJson.pages[0]))) {
+          parsed = normalizeFlutterManifest(rawJson);
+        }
       } catch {
         setValidation({
           fileName: file.name,
@@ -57,8 +65,8 @@ export default function ImportPage() {
 
       setValidation({
         fileName: file.name,
-        screenCount: Array.isArray(manifest.screens) ? manifest.screens.length : 0,
-        linkCount: Array.isArray(manifest.links) ? manifest.links.length : 0,
+        screenCount: Array.isArray(manifest.pages) ? manifest.pages.length : 0,
+        linkCount: 0,
         errors,
         manifest: errors.length === 0 ? manifest : null,
       });
@@ -313,12 +321,6 @@ export default function ImportPage() {
                       {validation.screenCount}
                     </strong>{' '}
                     screen{validation.screenCount !== 1 ? 's' : ''}
-                  </span>
-                  <span>
-                    <strong style={{ color: '#35d7bb' }}>
-                      {validation.linkCount}
-                    </strong>{' '}
-                    link{validation.linkCount !== 1 ? 's' : ''}
                   </span>
                 </div>
               ) : (

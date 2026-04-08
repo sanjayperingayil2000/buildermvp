@@ -7,42 +7,50 @@
 // INPUT — what the user uploads as manifest.json
 // ────────────────────────────────────────────
 
-/** A single screen entry in the manifest file */
-export interface ManifestScreen {
+export interface ManifestElement {
+  id: string;
+  type: 'button' | 'link' | 'input';
+  name: string; // e.g., "Submit Button" or "Email Field"
+}
+
+export interface ManifestPage {
   id: string;
   name: string;
-  type: string;
-  meta: Record<string, unknown>;
+  elements: ManifestElement[];
 }
 
-/** A navigation link between two screens */
-export interface ManifestLink {
-  from: string;   // source screenId
-  to: string;     // target screenId
-  condition: string | null;
-}
-
-/** Top-level manifest schema */
 export interface Manifest {
-  screens: ManifestScreen[];
-  links: ManifestLink[];
+  pages: ManifestPage[];
 }
 
 // ────────────────────────────────────────────
 // OUTPUT — what the export produces
 // ────────────────────────────────────────────
 
-/** A single navigation entry in the output file */
-export interface OutputNavigation {
-  from: string;
-  to: string;
-  condition: string | null;
-  edgeType: string;
+export interface ValidationRule {
+  maxLength?: number;
+  numberOnly?: boolean;
+  errorMessage?: string;
 }
 
-/** Top-level output JSON schema */
+export interface OutputElement extends ManifestElement {
+  validations?: ValidationRule;
+}
+
+export interface OutputPage {
+  id: string;
+  name: string;
+  elements: OutputElement[];
+}
+
+export interface OutputNavigation {
+  fromElementId: string; // The ID of the specific button/link/input triggering the route
+  toPageId: string;
+  condition: string | null;
+}
+
 export interface OutputJson {
   generatedAt: string;
-  screens: ManifestScreen[];
+  pages: OutputPage[];
   navigations: OutputNavigation[];
 }

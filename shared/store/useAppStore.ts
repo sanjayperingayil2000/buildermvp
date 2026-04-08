@@ -13,12 +13,18 @@ export interface ActionElement {
   id: string;
   label: string;
   tagName: string;
+  elementType?: 'button' | 'link' | 'input';
   actionType: string;
   navigateTo: string | null;
   apiEndpoint: string | null;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
   fallbackPageId?: string;
+  validations?: {
+    maxLength?: number;
+    numberOnly?: boolean;
+    errorMessage?: string;
+  };
 }
 
 export interface NavMapOutcome {

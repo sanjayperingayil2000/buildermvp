@@ -6,7 +6,7 @@
  */
 
 import { type Node, type Edge, MarkerType } from '@xyflow/react';
-import type { Manifest, ManifestScreen } from '@/types/manifest';
+import type { Manifest, ManifestPage, ManifestElement } from '@/types/manifest';
 import type { PageDescriptor } from '@/shared/store/useAppStore';
 
 // ── Layout constants (match the existing flow page grid) ──────────────
@@ -46,47 +46,40 @@ export function validateManifest(manifest: unknown): string[] {
 
   const m = manifest as Record<string, unknown>;
 
-  if (!Array.isArray(m.screens)) {
-    errors.push('"screens" must be an array.');
+  if (!Array.isArray(m.pages)) {
+    errors.push('"pages" must be an array.');
   } else {
-    m.screens.forEach((s: unknown, i: number) => {
-      if (!s || typeof s !== 'object') {
-        errors.push(`screens[${i}] is not an object.`);
+    m.pages.forEach((p: unknown, i: number) => {
+      if (!p || typeof p !== 'object') {
+        errors.push(`pages[${i}] is not an object.`);
         return;
       }
-      const screen = s as Record<string, unknown>;
-      if (typeof screen.id !== 'string' || !screen.id) {
-        errors.push(`screens[${i}].id is missing or not a string.`);
+      const page = p as Record<string, unknown>;
+      if (typeof page.id !== 'string' || !page.id) {
+        errors.push(`pages[${i}].id is missing or not a string.`);
       }
-      if (typeof screen.name !== 'string' || !screen.name) {
-        errors.push(`screens[${i}].name is missing or not a string.`);
+      if (typeof page.name !== 'string' || !page.name) {
+        errors.push(`pages[${i}].name is missing or not a string.`);
       }
-    });
-  }
-
-  if (!Array.isArray(m.links)) {
-    errors.push('"links" must be an array.');
-  } else {
-    const screenIds = new Set(
-      Array.isArray(m.screens)
-        ? (m.screens as ManifestScreen[]).map((s) => s.id)
-        : []
-    );
-    m.links.forEach((l: unknown, i: number) => {
-      if (!l || typeof l !== 'object') {
-        errors.push(`links[${i}] is not an object.`);
-        return;
-      }
-      const link = l as Record<string, unknown>;
-      if (typeof link.from !== 'string') {
-        errors.push(`links[${i}].from is missing or not a string.`);
-      } else if (screenIds.size > 0 && !screenIds.has(link.from as string)) {
-        errors.push(`links[${i}].from references unknown screen "${link.from}".`);
-      }
-      if (typeof link.to !== 'string') {
-        errors.push(`links[${i}].to is missing or not a string.`);
-      } else if (screenIds.size > 0 && !screenIds.has(link.to as string)) {
-        errors.push(`links[${i}].to references unknown screen "${link.to}".`);
+      if (page.elements !== undefined && !Array.isArray(page.elements)) {
+        errors.push(`pages[${i}].elements must be an array.`);
+      } else if (Array.isArray(page.elements)) {
+        page.elements.forEach((el: unknown, j: number) => {
+          if (!el || typeof el !== 'object') {
+            errors.push(`pages[${i}].elements[${j}] is not an object.`);
+            return;
+          }
+          const element = el as Record<string, unknown>;
+          if (typeof element.id !== 'string' || !element.id) {
+            errors.push(`pages[${i}].elements[${j}].id is missing or not a string.`);
+          }
+          if (typeof element.type !== 'string' || !element.type) {
+            errors.push(`pages[${i}].elements[${j}].type is missing or not a string.`);
+          }
+          if (typeof element.name !== 'string' || !element.name) {
+            errors.push(`pages[${i}].elements[${j}].name is missing or not a string.`);
+          }
+        });
       }
     });
   }
@@ -111,30 +104,31 @@ export function parseManifestToFlow(manifest: Manifest): {
   edges: Edge[];
   pages: PageDescriptor[];
 } {
-  // ── Map screens → nodes & PageDescriptors ────────────────────────
-  const pages: PageDescriptor[] = manifest.screens.map((screen) => {
-    // Collect outgoing links for this screen
-    const outgoingLinks = manifest.links.filter(l => l.from === screen.id);
+  // ── Map pages → nodes & PageDescriptors ────────────────────────
+  const pages: PageDescriptor[] = manifest.pages.map((page) => {
+    // Collect elements for this page
+    const elements = page.elements || [];
     
-    // Create an action element for each outgoing link to provide a source handle
-    const actionElements = outgoingLinks.map((link, idx) => ({
-      id: `action-${screen.id}-${idx}`,
-      label: link.condition ?? `Action ${idx + 1}`,
-      tagName: 'button',
-      actionType: 'navigate',
+    // Create an action element for each manifest element to provide a source handle
+    const actionElements = elements.map((element) => ({
+      id: element.id,
+      label: element.name,
+      tagName: element.type,
+      elementType: element.type as 'button' | 'link' | 'input',
+      actionType: 'none',
       navigateTo: null,
       apiEndpoint: null
     }));
 
     return {
-      id: screen.id,
-      name: screen.name,
+      id: page.id,
+      name: page.name,
       actionElements,
     };
   });
 
-  const nodes: Node[] = manifest.screens.map((screen, index) => ({
-    id: screen.id,
+  const nodes: Node[] = manifest.pages.map((page, index) => ({
+    id: page.id,
     type: 'pageNode' as const,
     position: gridPosition(index),
     data: {
@@ -143,33 +137,8 @@ export function parseManifestToFlow(manifest: Manifest): {
     dragHandle: '.node-drag-handle',
   }));
 
-  // ── Map links → edges ────────────────────────────────────────────
-  const edges: Edge[] = manifest.links.map((link, index) => {
-    // Find the corresponding action element
-    const outgoingFromScreen = manifest.links.filter(l => l.from === link.from);
-    const localIdx = outgoingFromScreen.indexOf(link);
-    const sourceHandleId = `action-${link.from}-${localIdx}`;
-
-    return {
-      id: `edge-manifest-${link.from}-${link.to}-${index}`,
-      type: 'deletable',
-      source: link.from,
-      sourceHandle: sourceHandleId,
-      target: link.to,
-      targetHandle: 'entry',
-      animated: true,
-      style: { stroke: '#3b82f6', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-      ...(link.condition
-        ? {
-            label: link.condition,
-            labelStyle: { fontSize: 11, fill: '#3b82f6', fontWeight: 600 },
-            labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9 },
-            data: { condition: link.condition, actionType: 'navigate', method: 'POST', outcomes: [], apiEndpoint: null },
-          }
-        : { data: { condition: null, actionType: 'navigate', method: 'POST', outcomes: [], apiEndpoint: null } }),
-    };
-  });
+  // No predefined edges
+  const edges: Edge[] = [];
 
   return { nodes, edges, pages };
 }
