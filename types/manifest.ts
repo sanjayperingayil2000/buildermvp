@@ -35,6 +35,12 @@ export interface ValidationRule {
 
 export interface OutputElement extends ManifestElement {
   validations?: ValidationRule;
+  // Add these logic properties
+  actionType?: string;
+  apiEndpoint?: string | null;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
+  fallbackPageId?: string;
 }
 
 export interface OutputPage {
@@ -47,6 +53,12 @@ export interface OutputNavigation {
   fromElementId: string; // The ID of the specific button/link/input triggering the route
   toPageId: string;
   condition: string | null;
+  // Add these logic properties from NavMap
+  actionType?: string;
+  apiEndpoint?: string | null;
+  method?: string;
+  outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
+  fallbackPageId?: string;
 }
 
 export interface OutputJson {

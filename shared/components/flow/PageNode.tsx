@@ -1,18 +1,16 @@
 'use client';
-
 import React, { useState } from 'react';
 import { Handle, Position, type NodeProps, MarkerType, type Edge } from '@xyflow/react';
 import { useAppStore, type PageDescriptor, type ActionElement } from '@/shared/store/useAppStore';
-
 interface PageNodeData {
   page: PageDescriptor;
   [key: string]: unknown;
 }
-
 export default function PageNode({ data, selected }: NodeProps) {
   const { page } = data as PageNodeData;
   const flowEdges = useAppStore((s) => s.flowEdges);
-
+  const activeElements = page.actionElements.filter((el) => !el.isHidden);
+  const hiddenElements = page.actionElements.filter((el) => el.isHidden);
   return (
     <div
       style={{
@@ -43,7 +41,6 @@ export default function PageNode({ data, selected }: NodeProps) {
           zIndex: 10,
         }}
       />
-
       {/* Header / drag handle */}
       <div
         className="node-drag-handle"
@@ -72,9 +69,8 @@ export default function PageNode({ data, selected }: NodeProps) {
         />
         {page.name}
       </div>
-
       {/* Action elements */}
-      {page.actionElements.length === 0 ? (
+      {activeElements.length === 0 ? (
         <div
           style={{
             padding: '10px 14px',
@@ -86,7 +82,7 @@ export default function PageNode({ data, selected }: NodeProps) {
           No interactive elements
         </div>
       ) : (
-        page.actionElements.map((el) => {
+        activeElements.map((el) => {
           const edgeCount = flowEdges.filter(
             (e) => e.source === page.id && e.sourceHandle === el.id
           ).length;
@@ -100,10 +96,42 @@ export default function PageNode({ data, selected }: NodeProps) {
           );
         })
       )}
+      {/* Restore Element Dropdown */}
+      {hiddenElements.length > 0 && (
+        <div style={{ padding: '8px 14px', borderTop: '1px solid #f1f5f9' }}>
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                useAppStore.getState().restoreActionElement(page.id, e.target.value);
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              fontSize: 11,
+              color: '#64748b',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: 6,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="" disabled>
+              — Restore an element —
+            </option>
+            {hiddenElements.map((el) => (
+              <option key={el.id} value={el.id}>
+                {el.label !== el.id ? el.label : 'Unnamed Element'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
-
 function ActionRow({
   element,
   currentEdgeCount,
@@ -114,21 +142,17 @@ function ActionRow({
   pageId: string;
 }) {
   const [showPopup, setShowPopup] = useState(false);
-
   const actionColor =
     element.actionType === 'navigate'
       ? '#3b82f6'
       : element.actionType === 'api-call'
       ? '#f59e0b'
       : '#94a3b8';
-
   const maxConnections =
     element.actionType === 'api-call' ? 3
     : element.actionType === 'navigate' ? 1
     : 1;
-
   const isSaturated = currentEdgeCount >= maxConnections;
-
   // Colour scheme:
   // navigate or none → green (#10b981) when available, grey (#6b7280) when saturated
   // api-call → amber (#f59e0b) when available, grey (#6b7280) when saturated
@@ -138,9 +162,7 @@ function ActionRow({
       : element.actionType === 'api-call'
       ? '#f59e0b'
       : '#10b981';
-
   const handleBorderColor = isSaturated ? '#9ca3af' : '#ffffff';
-
   const displayLabel =
     element.label && element.label !== element.id
       ? element.label
@@ -149,7 +171,6 @@ function ActionRow({
       : element.elementType === 'link'
       ? 'Link'
       : 'Button';
-
   return (
     <div
       style={{
@@ -205,8 +226,44 @@ function ActionRow({
             ? currentEdgeCount > 0 ? 'connected' : 'navigate'
             : 'tap to configure'}
         </span>
+        {/* Delete button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm('Hide this element?')) {
+              useAppStore.getState().hideActionElement(pageId, element.id);
+            }
+          }}
+          title="Hide element"
+          style={{
+            flexShrink: 0,
+            width: 20,
+            height: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 4,
+            cursor: 'pointer',
+            color: '#94a3b8',
+            fontSize: 14,
+            lineHeight: 1,
+            padding: 0,
+            transition: 'color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#ef4444';
+            e.currentTarget.style.background = '#fef2f2';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          ×
+        </button>
       </div>
-
       {/* Source handle(s) — on the right edge of this row */}
       {element.actionType === 'secure_entry_routing' ? (
         <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 20 }}>
@@ -262,7 +319,6 @@ function ActionRow({
           }}
         />
       )}
-
       {/* Configuration popup */}
       {showPopup && (
         <ActionConfigPopup
@@ -274,7 +330,6 @@ function ActionRow({
     </div>
   );
 }
-
 function ActionConfigPopup({
   element,
   pageId,
@@ -284,8 +339,9 @@ function ActionConfigPopup({
   pageId: string;
   onClose: () => void;
 }) {
-  const { pages, setPages, setPendingEdgeUpdate } = useAppStore();
-
+  const { pages, setPendingEdgeUpdate } = useAppStore();
+  // Editable label
+  const [label, setLabel] = useState(element.label);
   // Initialise local state from the element's current values
   const [actionType, setActionType] = useState<string>(element.actionType);
   const [apiEndpoint, setApiEndpoint] = useState<string>(element.apiEndpoint ?? '');
@@ -297,12 +353,10 @@ function ActionConfigPopup({
       .outcomes ?? []
   );
   const [fallbackPageId, setFallbackPageId] = useState<string>(element.fallbackPageId || '');
-
   // Validation states specifically for input fields
   const [maxLength, setMaxLength] = useState<number | ''>(element.validations?.maxLength ?? '');
   const [numberOnly, setNumberOnly] = useState<boolean>(element.validations?.numberOnly ?? false);
   const [errorMessage, setErrorMessage] = useState<string>(element.validations?.errorMessage ?? '');
-
   const handleActionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newVal = e.target.value;
     setActionType(newVal);
@@ -314,16 +368,13 @@ function ActionConfigPopup({
       setFallbackPageId('');
     }
   };
-
   const addOutcome = () => {
     if (outcomes.length >= 3) return;
     setOutcomes((prev) => [...prev, { outcomeKey: '', targetPageId: '' }]);
   };
-
   const removeOutcome = (index: number) => {
     setOutcomes((prev) => prev.filter((_, i) => i !== index));
   };
-
   const updateOutcome = (
     index: number,
     field: 'outcomeKey' | 'targetPageId',
@@ -333,46 +384,32 @@ function ActionConfigPopup({
       prev.map((o, i) => (i === index ? { ...o, [field]: value } : o))
     );
   };
-
   const handleSave = () => {
-    const updatedPages = pages.map((page) => ({
-      ...page,
-      actionElements: page.actionElements.map((el) => {
-        const isAdvanced = actionType === 'api-call' || actionType === 'secure_entry_routing';
-        if (el.id === element.id) {
-          const baseUpdate = {
-            ...el,
-            actionType: element.elementType === 'input' ? 'navigate' : actionType,
-            apiEndpoint: isAdvanced ? apiEndpoint || null : null,
-            method: isAdvanced ? method : 'POST',
-            outcomes: isAdvanced ? outcomes : [],
-            fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
-            navigateTo: null,
-          };
-          
-          if (element.elementType === 'input') {
-            const validations: ActionElement['validations'] = {};
-            if (maxLength !== '') validations.maxLength = Number(maxLength);
-            if (numberOnly) validations.numberOnly = true;
-            if (errorMessage) validations.errorMessage = errorMessage;
-            
-            return {
-              ...baseUpdate,
-              validations: Object.keys(validations).length > 0 ? validations : undefined,
-            } as ActionElement;
-          }
-          
-          return baseUpdate as ActionElement;
-        }
-        return el;
-      }),
-    }));
-    setPages(updatedPages);
-
+    const isAdvanced = actionType === 'api-call' || actionType === 'secure_entry_routing';
+    const resolvedActionType = element.elementType === 'input' ? 'navigate' : actionType;
+    const updates: Partial<ActionElement> = {
+      label,
+      actionType: resolvedActionType,
+      apiEndpoint: isAdvanced ? apiEndpoint || null : null,
+      method: isAdvanced ? method : 'POST',
+      outcomes: isAdvanced ? outcomes : [],
+      fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
+      navigateTo: null,
+    };
+    // Attach validations only for input elements, strip for non-inputs
+    if (element.elementType === 'input') {
+      const validations: ActionElement['validations'] = {};
+      if (maxLength !== '') validations.maxLength = Number(maxLength);
+      if (numberOnly) validations.numberOnly = true;
+      if (errorMessage) validations.errorMessage = errorMessage;
+      updates.validations = Object.keys(validations).length > 0 ? validations : undefined;
+    } else {
+      updates.validations = undefined;
+    }
+    useAppStore.getState().updateActionElement(pageId, element.id, updates);
     if (actionType === 'api-call' || actionType === 'secure_entry_routing') {
       // Read the current flowEdges directly without a reactive subscription
       const currentFlowEdges = useAppStore.getState().flowEdges;
-
       // Ensure we clean up any edges from this source handle
       const edgesWithoutThisHandle = currentFlowEdges.filter(
         (e) => e.source !== pageId || (
@@ -381,7 +418,6 @@ function ActionConfigPopup({
             : e.sourceHandle !== element.id
         )
       );
-
       const validOutcomes = outcomes.filter((o) => o.outcomeKey && o.targetPageId);
       const isRouteColored = actionType === 'secure_entry_routing';
       const routeColor = '#ec4899';
@@ -407,10 +443,8 @@ function ActionConfigPopup({
           fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
         },
       }));
-
       // Signal FlowPage to update its local edges state
       setPendingEdgeUpdate([...edgesWithoutThisHandle, ...newEdges]);
-
     } else {
       // navigate or none — remove all edges from this handle
       const currentFlowEdges = useAppStore.getState().flowEdges;
@@ -420,10 +454,8 @@ function ActionConfigPopup({
       // Signal FlowPage to update its local edges state
       setPendingEdgeUpdate(updatedEdges);
     }
-
     onClose();
   };
-
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '6px 8px',
@@ -434,7 +466,6 @@ function ActionConfigPopup({
     boxSizing: 'border-box',
     color: '#1e293b',
   };
-
   const labelStyle: React.CSSProperties = {
     fontSize: 11,
     color: '#64748b',
@@ -442,7 +473,6 @@ function ActionConfigPopup({
     marginBottom: 4,
     marginTop: 10,
   };
-
   return (
     <div
       style={{
@@ -467,7 +497,15 @@ function ActionConfigPopup({
       <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', marginBottom: 12 }}>
         Configure: {element.label !== element.id ? element.label : element.elementType === 'input' ? 'Input Field' : 'Button'}
       </div>
-
+      {/* Editable label */}
+      <label style={labelStyle}>Element Label</label>
+      <input
+        type="text"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="e.g. Submit Button"
+        style={inputStyle}
+      />
       {element.elementType === 'input' ? (
         <>
           <label style={labelStyle}>Max Length</label>
@@ -487,7 +525,6 @@ function ActionConfigPopup({
             />
             Number Only
           </label>
-
           <label style={labelStyle}>Error Message</label>
           <input
             type="text"
@@ -523,7 +560,6 @@ function ActionConfigPopup({
             <option value="api-call">API call</option>
             <option value="secure_entry_routing">Secure Entry Routing</option>
           </select>
-
           {/* Navigate hint */}
           {actionType === 'navigate' && (
             <div style={{
@@ -543,7 +579,6 @@ function ActionConfigPopup({
               to the target page node. Only one connection is allowed for navigate actions.
             </div>
           )}
-
           {/* API call fields and Secure Routing */}
           {(actionType === 'api-call' || actionType === 'secure_entry_routing') && (
             <>
@@ -561,7 +596,6 @@ function ActionConfigPopup({
                     <option value="PUT">PUT</option>
                     <option value="DELETE">DELETE</option>
                   </select>
-
                   <label style={labelStyle}>API endpoint URL</label>
                   <input
                     type="text"
@@ -572,7 +606,6 @@ function ActionConfigPopup({
                   />
                 </>
               )}
-
               {/* Outcomes */}
               <div style={{
                 marginTop: 12,
@@ -605,7 +638,6 @@ function ActionConfigPopup({
                     </button>
                   )}
                 </div>
-
                 <div style={{
                   fontSize: 10,
                   color: '#94a3b8',
@@ -615,13 +647,11 @@ function ActionConfigPopup({
                   The API must return JSON with an <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: 3 }}>outcome</code> field.
                   Each rule below maps one outcome value to a page.
                 </div>
-
                 {outcomes.length === 0 && (
                   <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
                     No outcomes yet. Click &quot;+ Add&quot; to define what happens after the API responds.
                   </div>
                 )}
-
                 {outcomes.map((outcome, i) => (
                   <div
                     key={i}
@@ -653,7 +683,6 @@ function ActionConfigPopup({
                         </button>
                       )}
                     </div>
-
                     <label style={{ ...labelStyle, marginTop: 0 }}>Outcome Key =</label>
                     <input
                       type="text"
@@ -663,7 +692,6 @@ function ActionConfigPopup({
                       style={inputStyle}
                       disabled={actionType === 'secure_entry_routing'}
                     />
-
                     <label style={labelStyle}>Navigate to page</label>
                     <select
                       value={outcome.targetPageId}
@@ -716,7 +744,6 @@ function ActionConfigPopup({
           )}
         </>
       )}
-
       {/* Footer buttons */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
         <button

@@ -258,9 +258,11 @@ const storeEdges = useAppStore((s) => s.flowEdges);
   }, [nodes, edges, pages]);
 
   const handleDownloadJson = useCallback(() => {
-    const output = flowToOutputJson(nodes, edges);
+    // We grab the freshest saved logic from the store
+    const { flowNodes, flowEdges, navMap } = useAppStore.getState();
+    const output = flowToOutputJson(flowNodes, flowEdges, navMap);
     downloadOutputJson(output);
-  }, [nodes, edges]);
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>

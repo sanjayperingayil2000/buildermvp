@@ -108,14 +108,14 @@ export function parseManifestToFlow(manifest: Manifest): {
   const pages: PageDescriptor[] = manifest.pages.map((page) => {
     // Collect elements for this page
     const elements = page.elements || [];
-    
+
     // Create an action element for each manifest element to provide a source handle
     const actionElements = elements.map((element) => ({
       id: element.id,
       label: element.name,
       tagName: element.type,
-      elementType: element.type as 'button' | 'link' | 'input',
-      actionType: 'none',
+      // CRITICAL FIX: Ensure exact matching, defaulting to button only if unrecognized
+      elementType: (element.type === 'input' ? 'input' : element.type === 'link' ? 'link' : 'button') as 'button' | 'link' | 'input', actionType: 'none',
       navigateTo: null,
       apiEndpoint: null
     }));

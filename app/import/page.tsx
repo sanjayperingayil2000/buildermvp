@@ -8,106 +8,95 @@ import { useAppStore } from '@/shared/store/useAppStore';
 import type { Manifest } from '@/types/manifest';
 import AppHeader from '@/shared/components/AppHeader';
 
-interface ValidationResult {
+interface FileValidation {
   fileName: string;
+  status: 'success' | 'error';
+  errorMessage?: string;
+  manifest?: Manifest;
   screenCount: number;
-  linkCount: number;
-  errors: string[];
-  manifest: Manifest | null;
 }
 
 export default function ImportPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<FileValidation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const processFile = useCallback((file: File) => {
-    if (!file.name.endsWith('.json')) {
-      setValidation({
-        fileName: file.name,
-        screenCount: 0,
-        linkCount: 0,
-        errors: ['File must be a .json file.'],
-        manifest: null,
-      });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      let parsed: unknown;
-
-      try {
-        parsed = JSON.parse(text);
-        
-        const rawJson = parsed as any;
-        // Basic heuristic for Flutter manifest structure: deeply nested objects with widgets or standard root nodes
-        // Or if user specifically provided platform hints under targetPlatform or flutterNotes
-        if (rawJson.targetPlatform === 'flutter' || rawJson.flutterNotes || (rawJson.pages && typeof rawJson.pages[0] === 'object' && ('widgets' in rawJson.pages[0] || 'children' in rawJson.pages[0] || 'child' in rawJson.pages[0]))) {
-          parsed = normalizeFlutterManifest(rawJson);
-        }
-      } catch {
-        setValidation({
-          fileName: file.name,
-          screenCount: 0,
-          linkCount: 0,
-          errors: ['Invalid JSON: could not parse file contents.'],
-          manifest: null,
-        });
+  const readFileAsJSON = (file: File): Promise<FileValidation> => {
+    return new Promise((resolve) => {
+      if (!file.name.endsWith('.json')) {
+        resolve({ fileName: file.name, status: 'error', errorMessage: 'Not a .json file', screenCount: 0 });
         return;
       }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          let parsed = JSON.parse(text);
+          
+          const rawJson = parsed as any;
+          if (rawJson.targetPlatform === 'flutter' || rawJson.flutterNotes || (rawJson.pages && typeof rawJson.pages[0] === 'object' && ('widgets' in rawJson.pages[0] || 'children' in rawJson.pages[0] || 'child' in rawJson.pages[0]))) {
+            parsed = normalizeFlutterManifest(rawJson);
+          }
+          
+          const errors = validateManifest(parsed);
+          if (errors.length > 0) {
+             resolve({ fileName: file.name, status: 'error', errorMessage: errors.join(', '), screenCount: 0 });
+          } else {
+             const manifest = parsed as Manifest;
+             resolve({ fileName: file.name, status: 'success', manifest, screenCount: Array.isArray(manifest.pages) ? manifest.pages.length : 0 });
+          }
+        } catch {
+          resolve({ fileName: file.name, status: 'error', errorMessage: 'Invalid JSON parsing', screenCount: 0 });
+        }
+      };
+      reader.onerror = () => resolve({ fileName: file.name, status: 'error', errorMessage: 'File read error', screenCount: 0 });
+      reader.readAsText(file);
+    });
+  };
 
-      const errors = validateManifest(parsed);
-      const manifest = parsed as Manifest;
-
-      setValidation({
-        fileName: file.name,
-        screenCount: Array.isArray(manifest.pages) ? manifest.pages.length : 0,
-        linkCount: 0,
-        errors,
-        manifest: errors.length === 0 ? manifest : null,
-      });
-    };
-
-    reader.onerror = () => {
-      setValidation({
-        fileName: file.name,
-        screenCount: 0,
-        linkCount: 0,
-        errors: ['Failed to read the file.'],
-        manifest: null,
-      });
-    };
-
-    reader.readAsText(file);
+  const processFiles = useCallback(async (files: File[]) => {
+    setIsLoading(true);
+    const results = await Promise.all(files.map(readFileAsJSON));
+    setUploadedFiles((prev) => [...prev, ...results]);
+    setIsLoading(false);
   }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) processFile(file);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) processFiles(files);
     },
-    [processFile]
+    [processFiles]
   );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) processFile(file);
+      const files = Array.from(e.target.files || []);
+      if (files.length > 0) processFiles(files);
+      
+      // Reset the file input so you can select multiple files successively
+      if (fileInputRef.current) fileInputRef.current.value = '';
     },
-    [processFile]
+    [processFiles]
   );
 
   const handleLoadIntoEditor = useCallback(() => {
-    if (!validation?.manifest) return;
+    const validManifests = uploadedFiles
+      .filter((file) => file.status === 'success' && file.manifest)
+      .map((file) => file.manifest as Manifest);
+
+    if (validManifests.length === 0) return;
     setIsLoading(true);
 
-    const { nodes, edges, pages } = parseManifestToFlow(validation.manifest);
+    // Merge pages from all valid manifests
+    const mergedPages = validManifests.flatMap((m) => m.pages);
+    const mergedManifest: Manifest = { pages: mergedPages };
+
+    const { nodes, edges, pages } = parseManifestToFlow(mergedManifest);
 
     // Push to store
     useAppStore.getState().setPages(pages);
@@ -115,10 +104,10 @@ export default function ImportPage() {
     useAppStore.getState().setFlowEdges(edges);
 
     router.push('/flow-editor');
-  }, [validation, router]);
+  }, [uploadedFiles, router]);
 
   const handleReset = useCallback(() => {
-    setValidation(null);
+    setUploadedFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
@@ -247,6 +236,7 @@ export default function ImportPage() {
               ref={fileInputRef}
               type="file"
               accept=".json"
+              multiple
               onChange={handleFileChange}
               style={{ display: 'none' }}
               id="manifest-file-input"
@@ -254,21 +244,16 @@ export default function ImportPage() {
           </div>
 
           {/* Validation summary */}
-          {validation && (
+          {uploadedFiles.length > 0 && (
             <div
               style={{
                 marginTop: 24,
                 padding: '16px 18px',
                 borderRadius: 10,
-                background:
-                  validation.errors.length > 0
-                    ? 'rgba(239, 68, 68, 0.08)'
-                    : 'rgba(53, 215, 187, 0.08)',
-                border: `1px solid ${
-                  validation.errors.length > 0
-                    ? 'rgba(239, 68, 68, 0.2)'
-                    : 'rgba(53, 215, 187, 0.2)'
-                }`,
+                background: 'rgba(30, 30, 46, 0.4)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                maxHeight: 200,
+                overflowY: 'auto',
               }}
             >
               <div
@@ -277,6 +262,8 @@ export default function ImportPage() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   marginBottom: 10,
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  paddingBottom: 8,
                 }}
               >
                 <span
@@ -286,13 +273,10 @@ export default function ImportPage() {
                     color: '#f8fafc',
                   }}
                 >
-                  {validation.fileName}
+                  Uploaded Files ({uploadedFiles.length})
                 </span>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReset();
-                  }}
+                  onClick={handleReset}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -303,33 +287,39 @@ export default function ImportPage() {
                     padding: 0,
                   }}
                 >
-                  Clear
+                  Clear All
                 </button>
               </div>
 
-              {validation.errors.length === 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 20,
-                    fontSize: 13,
-                    color: '#94a3b8',
-                  }}
-                >
-                  <span>
-                    <strong style={{ color: '#35d7bb' }}>
-                      {validation.screenCount}
-                    </strong>{' '}
-                    screen{validation.screenCount !== 1 ? 's' : ''}
-                  </span>
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.7 }}>
-                  {validation.errors.map((err, i) => (
-                    <div key={i}>• {err}</div>
-                  ))}
-                </div>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {uploadedFiles.map((file, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      background: 'rgba(15, 15, 26, 0.5)',
+                      borderLeft: `3px solid ${file.status === 'success' ? '#35d7bb' : '#ef4444'}`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500 }}>{file.fileName}</span>
+                      {file.status === 'success' ? (
+                        <span style={{ fontSize: 12, color: '#35d7bb' }}>{file.screenCount} screen(s)</span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#ef4444' }}>Error</span>
+                      )}
+                    </div>
+                    {file.status === 'error' && (
+                      <div style={{ fontSize: 11, color: '#fca5a5', marginTop: 4 }}>
+                        {file.errorMessage}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -341,26 +331,26 @@ export default function ImportPage() {
               marginTop: 24,
             }}
           >
-            {validation?.manifest && (
+            {uploadedFiles.length > 0 && (
               <button
                 id="load-into-editor-btn"
                 onClick={handleLoadIntoEditor}
-                disabled={isLoading}
+                disabled={isLoading || !uploadedFiles.some(f => f.status === 'success')}
                 style={{
                   flex: 1,
                   padding: '12px 24px',
-                  backgroundColor: isLoading ? '#1e4d44' : '#35d7bb',
+                  backgroundColor: isLoading || !uploadedFiles.some(f => f.status === 'success') ? '#1e4d44' : '#35d7bb',
                   color: '#0f0f1a',
                   border: 'none',
                   borderRadius: 8,
                   fontWeight: 600,
                   fontSize: 14,
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  cursor: isLoading || !uploadedFiles.some(f => f.status === 'success') ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s ease',
                   letterSpacing: '-0.01em',
                 }}
               >
-                {isLoading ? 'Loading...' : 'Load into Flow Editor →'}
+                {isLoading ? 'Loading...' : `Load ${uploadedFiles.filter(f => f.status === 'success').reduce((acc, f) => acc + f.screenCount, 0)} screens into Flow Editor →`}
               </button>
             )}
           </div>
