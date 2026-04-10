@@ -1,0 +1,62 @@
+import type { Edge, Connection } from '@xyflow/react';
+import { MarkerType } from '@xyflow/react';
+import type { EdgeAction } from '@/shared/types/store';
+
+export function createConnectionEdge(connection: Connection, edgeData?: EdgeAction): Edge {
+  return {
+    id: `edge-${connection.source}-${connection.sourceHandle}-${connection.target}-${Date.now()}`,
+    type: 'deletable',
+    source: connection.source!,
+    sourceHandle: connection.sourceHandle ?? null,
+    target: connection.target!,
+    targetHandle: connection.targetHandle ?? null,
+    animated: true,
+    style: { stroke: '#3b82f6', strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+    data: (edgeData ?? {
+      actionType: 'navigate',
+      apiEndpoint: null,
+      method: 'POST',
+      outcomes: [],
+    }) as Record<string, unknown>,
+  };
+}
+
+export function isValidConnection(
+  connection: { source: string; sourceHandle: string | null; target: string },
+  edges: Edge[],
+  pages: { id: string; actionElements: { id: string; actionType: string }[] }[]
+): { valid: boolean; message?: string } {
+  const { source, sourceHandle, target } = connection;
+
+  if (source === target) {
+    return { valid: false, message: 'Cannot connect a page to itself.' };
+  }
+
+  const sourcePage = pages.find((p) => p.id === source);
+  const actionElement = sourcePage?.actionElements.find(
+    (el) => sourceHandle && (sourceHandle === el.id || sourceHandle.startsWith(el.id + '__'))
+  );
+  const actionType = actionElement?.actionType ?? 'none';
+
+  const existingEdgesFromHandle = edges.filter(
+    (e) => e.source === source && e.sourceHandle === sourceHandle
+  );
+  const existingCount = existingEdgesFromHandle.length;
+
+  if (actionType === 'navigate' || actionType === 'none' || actionType === 'secure_entry_routing') {
+    if (existingCount >= 1) {
+      return { valid: false, message: 'This handle already has a connection. Each outcome can only conditionally route to one page.' };
+    }
+    return { valid: true };
+  }
+
+  if (actionType === 'api-call') {
+    if (existingCount >= 3) {
+      return { valid: false, message: 'This button already has 3 connections. API call buttons support a maximum of 3 outcome routes.' };
+    }
+    return { valid: true };
+  }
+
+  return { valid: true };
+}
