@@ -1,4 +1,4 @@
-import type { OutputJson } from '@/shared/types/manifest';
+import type { OutputJson } from './flowToOutputJson';
 
 export function downloadOutputJson(output: OutputJson): void {
   const jsonStr = JSON.stringify(output, null, 2);

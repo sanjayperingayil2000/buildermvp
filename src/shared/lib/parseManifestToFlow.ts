@@ -1,6 +1,6 @@
 import { type Node, type Edge } from '@xyflow/react';
 import type { Manifest } from '@/shared/types/manifest';
-import type { PageDescriptor } from '@/shared/types/store';
+import type { PageDescriptor, ActionElement } from '@/shared/types/store';
 import { ITEMS_PER_ROW, NODE_WIDTH, H_GAP, V_GAP } from '@/config/constants';
 
 function gridPosition(index: number): { x: number; y: number } {
@@ -20,18 +20,28 @@ export function parseManifestToFlow(manifest: Manifest): {
   const pages: PageDescriptor[] = manifest.pages.map((page) => {
     const elements = page.elements || [];
 
-    const actionElements = elements.map((element) => ({
-      id: element.id,
-      label: element.name,
-      tagName: element.type,
-      elementType: (element.type === 'input' ? 'input' : element.type === 'link' ? 'link' : 'button') as 'button' | 'link' | 'input',
-      actionType: 'none',
-      navigateTo: null,
-      apiEndpoint: null,
-    }));
+    const actionElements: ActionElement[] = elements.map((element) => {
+      const elementType: ActionElement['elementType'] =
+        element.type === 'input' ? 'input'
+        : element.type === 'link' ? 'link'
+        : 'button';
+
+      return {
+        id: element.id,
+        uuid: element.uuid,
+        label: element.name,
+        tagName: element.type,
+        elementType,
+        actionType: 'none' as const,
+        navigateTo: null,
+        apiEndpoint: null,
+        fieldMatchConditions: [],
+      };
+    });
 
     return {
       id: page.id,
+      uuid: page.uuid,
       name: page.name,
       actionElements,
     };

@@ -15,6 +15,7 @@ export default function PageNode({ data, selected }: NodeProps) {
   const flowEdges = useAppStore((s) => s.flowEdges);
   const activeElements = page.actionElements.filter((el: ActionElement) => !el.isHidden);
   const hiddenElements = page.actionElements.filter((el: ActionElement) => el.isHidden);
+  const inputElements = page.actionElements.filter((el: ActionElement) => el.elementType === 'input');
 
   return (
     <div
@@ -94,6 +95,7 @@ export default function PageNode({ data, selected }: NodeProps) {
               element={el}
               currentEdgeCount={edgeCount}
               pageId={page.id}
+              pageInputElements={inputElements}
             />
           );
         })

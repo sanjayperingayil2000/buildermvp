@@ -8,9 +8,10 @@ interface ActionRowProps {
   element: ActionElement;
   currentEdgeCount: number;
   pageId: string;
+  pageInputElements: ActionElement[];
 }
 
-export default function ActionRow({ element, currentEdgeCount, pageId }: ActionRowProps) {
+export default function ActionRow({ element, currentEdgeCount, pageId, pageInputElements }: ActionRowProps) {
   const [showPopup, setShowPopup] = useState(false);
   const pages = useAppStore((s) => s.pages);
   const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
@@ -71,32 +72,34 @@ export default function ActionRow({ element, currentEdgeCount, pageId }: ActionR
         </button>
       </div>
 
-      {element.actionType === 'secure_entry_routing' ? (
-        <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 20 }}>
-          {(element.outcomes || []).map((outcome, idx) => {
-            if (!outcome.outcomeKey) return null;
-            const topOffset = 20 + idx * 16;
-            return (
-              <Handle
-                key={outcome.outcomeKey}
-                type="source"
-                position={Position.Right}
-                id={`${element.id}__${outcome.outcomeKey}`}
-                title={`Secure Route: ${outcome.outcomeKey}`}
-                style={{ width: 10, height: 10, background: '#ec4899', border: '1.5px solid #ffffff', right: -5, top: topOffset, zIndex: 10 }}
-              />
-            );
-          })}
-        </div>
-      ) : (
-        <Handle
-          type="source"
-          position={Position.Right}
-          id={element.id}
-          title={isSaturated ? (element.actionType === 'api-call' ? 'Maximum 3 connections reached' : 'Already connected — delete the existing edge to reconnect') :
-            element.actionType === 'api-call' ? `API call — drag to add outcome route (${currentEdgeCount}/3)` : 'Navigate — drag to connect to a target page'}
-          style={{ width: 14, height: 14, background: handleColor, border: `2px solid ${handleBorderColor}`, right: -7, top: '50%', transform: 'translateY(-50%)', zIndex: 10, opacity: isSaturated ? 0.5 : 1, cursor: isSaturated ? 'not-allowed' : 'crosshair' }}
-        />
+      {element.elementType !== 'input' && (
+        element.actionType === 'secure_entry_routing' ? (
+          <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 20 }}>
+            {(element.outcomes || []).map((outcome, idx) => {
+              if (!outcome.outcomeKey) return null;
+              const topOffset = 20 + idx * 16;
+              return (
+                <Handle
+                  key={outcome.outcomeKey}
+                  type="source"
+                  position={Position.Right}
+                  id={`${element.id}__${outcome.outcomeKey}`}
+                  title={`Secure Route: ${outcome.outcomeKey}`}
+                  style={{ width: 10, height: 10, background: '#ec4899', border: '1.5px solid #ffffff', right: -5, top: topOffset, zIndex: 10 }}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={element.id}
+            title={isSaturated ? (element.actionType === 'api-call' ? 'Maximum 3 connections reached' : 'Already connected — delete the existing edge to reconnect') :
+              element.actionType === 'api-call' ? `API call — drag to add outcome route (${currentEdgeCount}/3)` : 'Navigate — drag to connect to a target page'}
+            style={{ width: 14, height: 14, background: handleColor, border: `2px solid ${handleBorderColor}`, right: -7, top: '50%', transform: 'translateY(-50%)', zIndex: 10, opacity: isSaturated ? 0.5 : 1, cursor: isSaturated ? 'not-allowed' : 'crosshair' }}
+          />
+        )
       )}
 
       {showPopup && (
@@ -104,6 +107,7 @@ export default function ActionRow({ element, currentEdgeCount, pageId }: ActionR
           element={element}
           pageId={pageId}
           pages={pages}
+          pageInputElements={pageInputElements}
           setPendingEdgeUpdate={setPendingEdgeUpdate as unknown as (edges: unknown[] | null) => void}
           onClose={() => setShowPopup(false)}
         />
@@ -116,12 +120,14 @@ function ActionConfigPopup({
   element,
   pageId,
   pages,
+  pageInputElements,
   setPendingEdgeUpdate,
   onClose,
 }: {
   element: ActionElement;
   pageId: string;
   pages: { id: string; name: string }[];
+  pageInputElements: ActionElement[];
   setPendingEdgeUpdate: (edges: unknown[] | null) => void;
   onClose: () => void;
 }) {
@@ -131,9 +137,19 @@ function ActionConfigPopup({
   const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'DELETE'>(element.method ?? 'POST');
   const [outcomes, setOutcomes] = useState<Array<{ outcomeKey: string; targetPageId: string }>>(element.outcomes ?? []);
   const [fallbackPageId, setFallbackPageId] = useState<string>(element.fallbackPageId || '');
+  const [minLength, setMinLength] = useState<number | ''>(element.validations?.minLength ?? '');
   const [maxLength, setMaxLength] = useState<number | ''>(element.validations?.maxLength ?? '');
-  const [numberOnly, setNumberOnly] = useState<boolean>(element.validations?.numberOnly ?? false);
-  const [errorMessage, setErrorMessage] = useState<string>(element.validations?.errorMessage ?? '');
+  const [dataType, setDataType] = useState<'any' | 'numbers' | 'letters' | 'alphanumeric'>(element.validations?.dataType ?? 'any');
+  const [fieldMatchConditions, setFieldMatchConditions] = useState<Array<{ field1Id: string; field2Id: string; errorMessage: string }>>(
+    (element.fieldMatchConditions ?? []).map((c) => ({
+      field1Id: c.field1Id,
+      field2Id: c.field2Id,
+      errorMessage: c.errorMessage,
+    }))
+  );
+  const [customConditions, setCustomConditions] = useState<Array<{ ruleDescription: string; errorMessage: string }>>(
+    element.customConditions ?? []
+  );
 
   const handleActionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newVal = e.target.value;
@@ -154,26 +170,57 @@ function ActionConfigPopup({
   };
 
   const handleSave = () => {
+    if (element.elementType === 'input') {
+      const validations: ActionElement['validations'] = {};
+      if (minLength !== '') validations.minLength = Number(minLength);
+      if (maxLength !== '') validations.maxLength = Number(maxLength);
+      if (dataType !== 'any') validations.dataType = dataType;
+
+      useAppStore.getState().updateActionElement(pageId, element.id, {
+        label,
+        actionType: 'none',
+        validations: Object.keys(validations).length > 0 ? validations : undefined,
+        fieldMatchConditions: undefined,
+      });
+      onClose();
+      return;
+    }
+
+    const enrichedConditions = fieldMatchConditions
+      .filter((c) => c.field1Id && c.field2Id && c.field1Id !== c.field2Id)
+      .map((c) => {
+        const f1 = pageInputElements.find((el) => el.id === c.field1Id);
+        const f2 = pageInputElements.find((el) => el.id === c.field2Id);
+        return {
+          field1Id: c.field1Id,
+          field1Label: f1?.label ?? c.field1Id,
+          field1Uuid: f1?.uuid,
+          field2Id: c.field2Id,
+          field2Label: f2?.label ?? c.field2Id,
+          field2Uuid: f2?.uuid,
+          errorMessage: c.errorMessage,
+        };
+      });
+
     const isAdvanced = actionType === 'api-call' || actionType === 'secure_entry_routing';
-    const resolvedActionType = element.elementType === 'input' ? 'navigate' : actionType;
+    
+    const validCustomConditions = customConditions.filter(
+      (c) => c.ruleDescription.trim() !== ''
+    );
+
     const updates: Partial<ActionElement> = {
       label,
-      actionType: resolvedActionType,
+      actionType: actionType as ActionElement['actionType'],
       apiEndpoint: isAdvanced ? apiEndpoint || null : null,
       method: isAdvanced ? method : 'POST',
       outcomes: isAdvanced ? outcomes : [],
       fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
       navigateTo: null,
+      validations: undefined,
+      fieldMatchConditions: enrichedConditions,
+      customConditions: validCustomConditions.length > 0 ? validCustomConditions : undefined,
     };
-    if (element.elementType === 'input') {
-      const validations: ActionElement['validations'] = {};
-      if (maxLength !== '') validations.maxLength = Number(maxLength);
-      if (numberOnly) validations.numberOnly = true;
-      if (errorMessage) validations.errorMessage = errorMessage;
-      updates.validations = Object.keys(validations).length > 0 ? validations : undefined;
-    } else {
-      updates.validations = undefined;
-    }
+
     useAppStore.getState().updateActionElement(pageId, element.id, updates);
 
     if (actionType === 'api-call' || actionType === 'secure_entry_routing') {
@@ -222,13 +269,19 @@ function ActionConfigPopup({
 
       {element.elementType === 'input' ? (
         <>
+          <label style={labelStyle}>Min Length</label>
+          <input type="number" value={minLength} onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : '')} placeholder="e.g. 10" style={inputStyle} />
+
           <label style={labelStyle}>Max Length</label>
-          <input type="number" value={maxLength} onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : '')} placeholder="e.g. 10" style={inputStyle} />
-          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" checked={numberOnly} onChange={(e) => setNumberOnly(e.target.checked)} /> Number Only
-          </label>
-          <label style={labelStyle}>Error Message</label>
-          <input type="text" value={errorMessage} onChange={(e) => setErrorMessage(e.target.value)} placeholder="e.g. Invalid input" style={inputStyle} />
+          <input type="number" value={maxLength} onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : '')} placeholder="e.g. 16" style={inputStyle} />
+
+          <label style={labelStyle}>Data Type</label>
+          <select value={dataType} onChange={(e) => setDataType(e.target.value as typeof dataType)} style={inputStyle}>
+            <option value="any">Any</option>
+            <option value="numbers">Numbers only</option>
+            <option value="letters">Letters only</option>
+            <option value="alphanumeric">Alphanumeric</option>
+          </select>
         </>
       ) : (
         <>
@@ -292,6 +345,145 @@ function ActionConfigPopup({
               </div>
             </>
           )}
+
+          <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
+                Field Match Conditions ({fieldMatchConditions.length})
+              </span>
+              <button
+                onClick={() =>
+                  setFieldMatchConditions((prev) => [
+                    ...prev,
+                    { field1Id: '', field2Id: '', errorMessage: '' },
+                  ])
+                }
+                style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #3b82f6', background: 'transparent', color: '#3b82f6', cursor: 'pointer' }}
+              >
+                + Add
+              </button>
+            </div>
+
+            {pageInputElements.length < 2 && (
+              <p style={{ fontSize: 10, color: '#94a3b8', margin: '4px 0 8px' }}>
+                Need at least 2 input fields on this page to add a match condition.
+              </p>
+            )}
+
+            {fieldMatchConditions.map((cond, i) => (
+              <div
+                key={i}
+                style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>Condition {i + 1}</span>
+                  <button
+                    onClick={() => setFieldMatchConditions((prev) => prev.filter((_, idx) => idx !== i))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11, padding: 0 }}
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                <label style={labelStyle}>Field 1</label>
+                <select
+                  value={cond.field1Id}
+                  onChange={(e) =>
+                    setFieldMatchConditions((prev) =>
+                      prev.map((c, idx) => idx === i ? { ...c, field1Id: e.target.value } : c)
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">— select input field —</option>
+                  {pageInputElements.map((el) => (
+                    <option key={el.id} value={el.id}>{el.label || el.id}</option>
+                  ))}
+                </select>
+
+                <label style={labelStyle}>must equal Field 2</label>
+                <select
+                  value={cond.field2Id}
+                  onChange={(e) =>
+                    setFieldMatchConditions((prev) =>
+                      prev.map((c, idx) => idx === i ? { ...c, field2Id: e.target.value } : c)
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">— select input field —</option>
+                  {pageInputElements.map((el) => (
+                    <option key={el.id} value={el.id}>{el.label || el.id}</option>
+                  ))}
+                </select>
+
+                <label style={labelStyle}>Error message if they don't match</label>
+                <input
+                  type="text"
+                  value={cond.errorMessage}
+                  onChange={(e) =>
+                    setFieldMatchConditions((prev) =>
+                      prev.map((c, idx) => idx === i ? { ...c, errorMessage: e.target.value } : c)
+                    )
+                  }
+                  placeholder="e.g. Los números no coinciden"
+                  style={inputStyle}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
+                Custom Conditions ({customConditions.length})
+              </span>
+              <button
+                onClick={() => setCustomConditions((prev) => [...prev, { ruleDescription: '', errorMessage: '' }])}
+                style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #3b82f6', background: 'transparent', color: '#3b82f6', cursor: 'pointer' }}
+              >
+                + Add
+              </button>
+            </div>
+            
+            {customConditions.length === 0 && (
+              <p style={{ fontSize: 10, color: '#94a3b8', margin: '4px 0 8px' }}>
+                Add custom developer rules (e.g., &quot;User is logged in&quot;, &quot;Cart total &gt; 0&quot;).
+              </p>
+            )}
+
+            {customConditions.map((cond, i) => (
+              <div key={i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>Custom Rule {i + 1}</span>
+                  <button
+                    onClick={() => setCustomConditions((prev) => prev.filter((_, idx) => idx !== i))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11, padding: 0 }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                
+                <label style={labelStyle}>Condition Description</label>
+                <input
+                  type="text"
+                  value={cond.ruleDescription}
+                  onChange={(e) => setCustomConditions((prev) => prev.map((c, idx) => idx === i ? { ...c, ruleDescription: e.target.value } : c))}
+                  placeholder="e.g. User account status must be active"
+                  style={inputStyle}
+                />
+                
+                <label style={labelStyle}>Error message if rule fails</label>
+                <input
+                  type="text"
+                  value={cond.errorMessage}
+                  onChange={(e) => setCustomConditions((prev) => prev.map((c, idx) => idx === i ? { ...c, errorMessage: e.target.value } : c))}
+                  placeholder="e.g. Account is inactive."
+                  style={inputStyle}
+                />
+              </div>
+            ))}
+          </div>
         </>
       )}
 

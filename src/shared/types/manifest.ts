@@ -1,13 +1,15 @@
 export interface ManifestElement {
   id: string;
+  uuid?: string;
   type: 'button' | 'link' | 'input';
   name: string;
 }
 
 export interface ManifestPage {
   id: string;
+  uuid?: string;
   name: string;
-  elements: ManifestElement[];
+  elements?: ManifestElement[];
 }
 
 export interface Manifest {
@@ -15,13 +17,21 @@ export interface Manifest {
 }
 
 export interface ValidationRule {
+  minLength?: number;
   maxLength?: number;
-  numberOnly?: boolean;
-  errorMessage?: string;
+  dataType?: 'any' | 'numbers' | 'letters' | 'alphanumeric';
+}
+
+export interface FieldMatchCondition {
+  field1Id: string;
+  field2Id: string;
+  errorMessage: string;
 }
 
 export interface OutputElement extends ManifestElement {
+  uuid?: string;
   validations?: ValidationRule;
+  fieldMatchConditions?: FieldMatchCondition[];
   actionType?: string;
   apiEndpoint?: string | null;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -31,6 +41,7 @@ export interface OutputElement extends ManifestElement {
 
 export interface OutputPage {
   id: string;
+  uuid?: string;
   name: string;
   elements: OutputElement[];
 }

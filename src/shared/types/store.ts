@@ -1,11 +1,13 @@
 export interface PageDescriptor {
   id: string;
+  uuid?: string;
   name: string;
   actionElements: ActionElement[];
 }
 
 export interface ActionElement {
   id: string;
+  uuid?: string;
   label: string;
   tagName: string;
   elementType?: 'button' | 'link' | 'input';
@@ -17,10 +19,23 @@ export interface ActionElement {
   fallbackPageId?: string;
   isHidden?: boolean;
   validations?: {
+    minLength?: number;
     maxLength?: number;
-    numberOnly?: boolean;
-    errorMessage?: string;
+    dataType?: 'any' | 'numbers' | 'letters' | 'alphanumeric';
   };
+  fieldMatchConditions?: Array<{
+    field1Id: string;
+    field1Label: string;
+    field2Id: string;
+    field2Label: string;
+    field1Uuid?: string;
+    field2Uuid?: string;
+    errorMessage: string;
+  }>;
+  customConditions?: Array<{
+    ruleDescription: string;
+    errorMessage: string;
+  }>;
 }
 
 export interface NavMapOutcome {

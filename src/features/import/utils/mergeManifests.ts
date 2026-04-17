@@ -1,5 +1,6 @@
 import type { Manifest } from '@/shared/types/manifest';
 import { normalizeFlutterManifest } from '@/shared/lib/adapters/flutterManifestAdapter';
+import { normalizeV2Manifest } from '@/shared/lib/adapters/v2ManifestAdapter';
 import { validateManifest } from '@/shared/lib/validators/manifestValidator';
 
 export function readAndValidateFile(file: File): Promise<{ fileName: string; status: 'success' | 'error'; errorMessage?: string; manifest?: Manifest; screenCount: number }> {
@@ -15,16 +16,19 @@ export function readAndValidateFile(file: File): Promise<{ fileName: string; sta
         let parsed = JSON.parse(text);
         
         const rawJson = parsed as Record<string, unknown>;
-        const isFlutter = 
+        
+        // Check for v2.0 manifest first - never treat as Flutter
+        if (rawJson.manifest_version === '2.0') {
+          parsed = normalizeV2Manifest(rawJson);
+        } else if (
           rawJson.targetPlatform === 'flutter' || 
           rawJson.flutterNotes || 
           (Array.isArray(rawJson.pages) && rawJson.pages.length > 0 && typeof rawJson.pages[0] === 'object' && (
-            'widgets' in (rawJson.pages[0] as Record<string, unknown>) || 
             'children' in (rawJson.pages[0] as Record<string, unknown>) ||
             'child' in (rawJson.pages[0] as Record<string, unknown>)
-          ));
-
-        if (isFlutter) {
+          ))
+        ) {
+          // Only check for children/child, NOT widgets - widgets are v2.0 format
           parsed = normalizeFlutterManifest(rawJson);
         }
         
