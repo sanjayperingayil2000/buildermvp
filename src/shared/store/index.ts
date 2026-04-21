@@ -47,6 +47,9 @@ interface AppState {
   /** Build config JSON with theme colours and typography (for Next.js export) */
   buildConfig: BuildConfig | null;
 
+  /** The page ID currently marked as the starting page (null if none) */
+  startingPageId: string | null;
+
   setPages: (pages: PageDescriptor[]) => void;
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
@@ -56,6 +59,7 @@ interface AppState {
   setToast: (message: string | null, type?: 'success' | 'error' | 'info') => void;
   setRawManifestPages: (pages: RawManifestPage[]) => void;
   setBuildConfig: (config: BuildConfig) => void;
+  setStartingPageId: (pageId: string | null) => void;
 
   hideActionElement: (pageId: string, elementId: string) => void;
   restoreActionElement: (pageId: string, elementId: string) => void;
@@ -75,6 +79,7 @@ export const useAppStore = create<AppState>()(
       toastType: 'info',
       rawManifestPages: null,
       buildConfig: null,
+      startingPageId: null,
 
       setPages: (newPages) => set((state) => {
         const validPageIds = new Set(newPages.map((p) => p.id));
@@ -85,11 +90,17 @@ export const useAppStore = create<AppState>()(
         const nextNavMap = state.navMap.filter(
           (entry) => validPageIds.has(entry.sourcePageId) && validPageIds.has(entry.targetPageId)
         );
+        // Clear startingPageId if the selected page was deleted
+        const nextStartingPageId =
+          state.startingPageId && !validPageIds.has(state.startingPageId)
+            ? null
+            : state.startingPageId;
         return {
           pages: newPages,
           flowNodes: nextNodes,
           flowEdges: nextEdges,
           navMap: nextNavMap,
+          startingPageId: nextStartingPageId,
         };
       }),
 
@@ -101,6 +112,7 @@ export const useAppStore = create<AppState>()(
       setToast: (message, type = 'info') => set({ toastMessage: message, toastType: type }),
       setRawManifestPages: (pages) => set({ rawManifestPages: pages }),
       setBuildConfig: (config) => set({ buildConfig: config }),
+      setStartingPageId: (pageId) => set({ startingPageId: pageId }),
 
       hideActionElement: (pageId, elementId) => set((state) => {
         const cleanedEdges = state.flowEdges.filter(
@@ -166,6 +178,7 @@ export const useAppStore = create<AppState>()(
         navMap: state.navMap,
         rawManifestPages: state.rawManifestPages,
         buildConfig: state.buildConfig,
+        startingPageId: state.startingPageId,
       }),
     }
   )

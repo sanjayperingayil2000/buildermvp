@@ -51,6 +51,7 @@ interface OutputPage {
   id: string;
   uuid?: string;
   name: string;
+  startingPage: boolean;
   elements: OutputElement[];
 }
 
@@ -161,6 +162,8 @@ function serializeElement(
 export function flowToOutputJson(
   nodes: Node[],
   edges: Edge[],
+  navMap: unknown,
+  startingPageId: string | null = null,
 ): OutputJson {
   const rawPages: OutputPage[] = [];
 
@@ -176,6 +179,7 @@ export function flowToOutputJson(
       id: page.id,
       uuid: page.uuid,
       name: page.name,
+      startingPage: page.id === startingPageId,
       elements,
     });
   }

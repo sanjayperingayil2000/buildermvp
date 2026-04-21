@@ -129,8 +129,8 @@ export default function FlowCanvas() {
   }, [nodes, edges, pages]);
 
   const handleDownloadJson = useCallback(() => {
-    const { flowNodes, flowEdges } = useAppStore.getState();
-    const output = flowToOutputJson(flowNodes, flowEdges);
+    const { flowNodes, flowEdges, startingPageId } = useAppStore.getState();
+    const output = flowToOutputJson(flowNodes, flowEdges, startingPageId);
     downloadOutputJson(output);
   }, []);
 

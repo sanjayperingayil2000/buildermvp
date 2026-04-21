@@ -13,6 +13,9 @@ interface PageNodeData {
 export default function PageNode({ data, selected }: NodeProps) {
   const { page } = data as PageNodeData;
   const flowEdges = useAppStore((s) => s.flowEdges);
+  const startingPageId = useAppStore((s) => s.startingPageId);
+  const setStartingPageId = useAppStore((s) => s.setStartingPageId);
+  const isStartingPage = startingPageId === page.id;
   const activeElements = page.actionElements.filter((el: ActionElement) => !el.isHidden);
   const hiddenElements = page.actionElements.filter((el: ActionElement) => el.isHidden);
 
@@ -21,11 +24,17 @@ export default function PageNode({ data, selected }: NodeProps) {
       style={{
         width: 260,
         background: '#ffffff',
-        border: selected ? '2px solid #3b82f6' : '1.5px solid #e2e8f0',
+        border: isStartingPage
+          ? '2px solid #f59e0b'
+          : selected
+            ? '2px solid #3b82f6'
+            : '1.5px solid #e2e8f0',
         borderRadius: 10,
-        boxShadow: selected
-          ? '0 0 0 3px rgba(59,130,246,0.15)'
-          : '0 2px 8px rgba(0,0,0,0.08)',
+        boxShadow: isStartingPage
+          ? '0 0 0 3px rgba(245,158,11,0.2)'
+          : selected
+            ? '0 0 0 3px rgba(59,130,246,0.15)'
+            : '0 2px 8px rgba(0,0,0,0.08)',
         fontFamily: 'system-ui, sans-serif',
         position: 'relative',
       }}
@@ -48,7 +57,7 @@ export default function PageNode({ data, selected }: NodeProps) {
       <div
         className="node-drag-handle"
         style={{
-          background: '#1e293b',
+          background: isStartingPage ? '#78350f' : '#1e293b',
           color: '#f8fafc',
           padding: '10px 14px',
           borderRadius: '8px 8px 0 0',
@@ -66,12 +75,52 @@ export default function PageNode({ data, selected }: NodeProps) {
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: '#64748b',
+            background: isStartingPage ? '#f59e0b' : '#64748b',
             display: 'inline-block',
           }}
         />
         {page.name}
+        {isStartingPage && (
+          <span style={{ marginLeft: 'auto', fontSize: 14, lineHeight: 1 }} title="Starting Page">⭐</span>
+        )}
       </div>
+      {/* Starting Page checkbox */}
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 14px',
+          cursor: 'pointer',
+          userSelect: 'none',
+          background: isStartingPage ? '#fffbeb' : '#f8fafc',
+          borderBottom: '1px solid #f1f5f9',
+          transition: 'background 0.15s ease',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={isStartingPage}
+          onChange={() => setStartingPageId(isStartingPage ? null : page.id)}
+          style={{
+            width: 14,
+            height: 14,
+            accentColor: '#f59e0b',
+            cursor: 'pointer',
+            margin: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: isStartingPage ? 600 : 400,
+            color: isStartingPage ? '#92400e' : '#64748b',
+          }}
+        >
+          Starting Page
+        </span>
+      </label>
       {activeElements.length === 0 ? (
         <div
           style={{
