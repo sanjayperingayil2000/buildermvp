@@ -22,9 +22,7 @@ export function parseManifestToFlow(manifest: Manifest): {
 
     const actionElements: ActionElement[] = elements.map((element) => {
       const elementType: ActionElement['elementType'] =
-        element.type === 'input' ? 'input'
-          : element.type === 'link' ? 'link'
-            : 'button';
+        element.type === 'link' ? 'link' : 'button';
 
       return {
         id: element.id,
@@ -34,7 +32,6 @@ export function parseManifestToFlow(manifest: Manifest): {
         actionType: 'none' as const,
         navigateTo: null,
         apiEndpoint: null,
-        fieldMatchConditions: [],
       };
     });
 

@@ -2,7 +2,7 @@ import type { Manifest, ManifestPage } from '@/shared/types/manifest';
 
 const SKIP_TYPES = new Set([
   'toolbar', 'header', 'appbar', 'navigationbar', 'divider',
-  'spacer', 'image', 'icon', 'label',
+  'spacer', 'image', 'icon', 'label'
 ]);
 
 interface RawWidget {
@@ -25,9 +25,8 @@ interface RawWidgetManifest {
   pages?: RawWidgetPage[];
 }
 
-function resolveElementType(type: string): 'input' | 'button' | 'link' | null {
+function resolveElementType(type: string): 'button' | 'link' | null {
   const t = type.toLowerCase();
-  if (t.includes('input') || t.includes('textfield') || t.includes('field')) return 'input';
   if (t.includes('link')) return 'link';
   if (
     t.includes('button') ||

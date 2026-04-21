@@ -129,8 +129,8 @@ export default function FlowCanvas() {
   }, [nodes, edges, pages]);
 
   const handleDownloadJson = useCallback(() => {
-    const { flowNodes, flowEdges, navMap } = useAppStore.getState();
-    const output = flowToOutputJson(flowNodes, flowEdges, navMap);
+    const { flowNodes, flowEdges } = useAppStore.getState();
+    const output = flowToOutputJson(flowNodes, flowEdges);
     downloadOutputJson(output);
   }, []);
 
@@ -283,6 +283,10 @@ export default function FlowCanvas() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#10b981', border: '2px solid #fff', display: 'inline-block' }} />
                   <span>Navigate — 1 connection max</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#8b5cf6', border: '2px solid #fff', display: 'inline-block' }} />
+                  <span>Conditional navigate — JSON expression</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#f59e0b', border: '2px solid #fff', display: 'inline-block' }} />

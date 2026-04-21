@@ -5,11 +5,27 @@ export interface PageDescriptor {
   actionElements: ActionElement[];
 }
 
+export interface ExpressionClause {
+  leftField: string;           // e.g. "account_page.input_card_number"
+  operator: '==' | '!=' | '>' | '<' | '>=' | '<=';
+  rightType: 'field' | 'value';
+  rightField: string;          // used when rightType = 'field'
+  rightValue: string;          // used when rightType = 'value'
+}
+
+export interface JsonCondition {
+  outcomeKey: string;          // unique key, e.g. "match", "above_50"
+  targetPageId: string;        // page to navigate to if condition passes
+  errorMessage: string;        // shown to user if condition fails
+  clauseOperator: 'AND' | 'OR'; // how clauses are joined
+  clauses: ExpressionClause[]; // one or more clauses
+}
+
 export interface ActionElement {
   id: string;
   uuid?: string;
   label: string;
-  elementType?: 'button' | 'link' | 'input';
+  elementType?: 'button' | 'link';
   actionType: string;
   navigateTo: string | null;
   apiEndpoint: string | null;
@@ -17,24 +33,7 @@ export interface ActionElement {
   outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
   fallbackPageId?: string;
   isHidden?: boolean;
-  validations?: {
-    minLength?: number;
-    maxLength?: number;
-    dataType?: 'any' | 'numbers' | 'letters' | 'alphanumeric';
-  };
-  fieldMatchConditions?: Array<{
-    field1Id: string;
-    field1Label: string;
-    field2Id: string;
-    field2Label: string;
-    field1Uuid?: string;
-    field2Uuid?: string;
-    errorMessage: string;
-  }>;
-  customConditions?: Array<{
-    ruleDescription: string;
-    errorMessage: string;
-  }>;
+  jsonConditions?: JsonCondition[];
 }
 
 export interface NavMapOutcome {

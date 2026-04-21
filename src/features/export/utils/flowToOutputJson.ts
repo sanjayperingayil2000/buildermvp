@@ -1,11 +1,6 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { PageDescriptor, ActionElement } from '@/shared/types/store';
-
-interface OutputValidation {
-  rule: 'minLength' | 'maxLength' | 'dataType';
-  value: number | string;
-  description: string;
-}
+import { serializeConditionToExpression } from '@/features/flow-editor/utils/serializeExpression';
 
 interface OutputFieldRef {
   id: string;
@@ -14,9 +9,19 @@ interface OutputFieldRef {
 }
 
 interface OutputCondition {
-  type: 'all_inputs_valid' | 'fields_match' | 'custom_rule';
+  type: 'all_inputs_valid' | 'fields_match' | 'custom_rule' | 'json_expression';
   description: string;
-  fields?: OutputFieldRef[];
+  expression?: string;
+  outcomeKey?: string;
+  targetPageId?: string;
+  clauses?: Array<{
+    leftField: string;
+    operator: string;
+    rightType: 'field' | 'value';
+    rightField?: string;
+    rightValue?: string;
+  }>;
+  clauseOperator?: 'AND' | 'OR';
   onMismatch?: {
     action: 'showError';
     errorMessage: string;
@@ -29,7 +34,7 @@ interface OutputOnSuccess {
   targetPageId: string | null;
   apiEndpoint?: string | null;
   method?: string;
-  outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
+  outcomes?: Array<{ outcomeKey: string; targetPageId: string; expression?: string }>;
   description: string;
 }
 
@@ -38,7 +43,6 @@ interface OutputElement {
   uuid?: string;
   label: string;
   elementType: 'input' | 'button' | 'link';
-  validations?: OutputValidation[];
   conditions?: OutputCondition[];
   onAllConditionsMet?: OutputOnSuccess;
 }
@@ -62,113 +66,37 @@ export interface OutputJson {
   }>;
 }
 
-function describeValidation(rule: string, value: number | string): string {
-  switch (rule) {
-    case 'minLength':
-      return `Value must be at least ${value} character${value === 1 ? '' : 's'} long`;
-    case 'maxLength':
-      return `Value must be at most ${value} character${value === 1 ? '' : 's'} long`;
-    case 'dataType': {
-      const labels: Record<string, string> = {
-        numbers: 'Only numeric characters (0-9) are accepted',
-        letters: 'Only alphabetic characters (a-z, A-Z) are accepted',
-        alphanumeric: 'Only letters and numbers are accepted — no special characters',
-        any: 'Any characters are accepted',
-      };
-      return labels[value as string] ?? `Input must be of type: ${value}`;
-    }
-    default:
-      return `Rule: ${rule} = ${value}`;
-  }
-}
 
 function serializeElement(
   el: ActionElement,
-  pageInputElements: ActionElement[],
   pageId: string,
   edges: Edge[],
 ): OutputElement {
-  if (el.elementType === 'input') {
-    const validations: OutputValidation[] = [];
-    const v = el.validations ?? {};
-    if (v.minLength !== undefined) {
-      validations.push({
-        rule: 'minLength',
-        value: v.minLength,
-        description: describeValidation('minLength', v.minLength),
-      });
-    }
-    if (v.maxLength !== undefined) {
-      validations.push({
-        rule: 'maxLength',
-        value: v.maxLength,
-        description: describeValidation('maxLength', v.maxLength),
-      });
-    }
-    if (v.dataType && v.dataType !== 'any') {
-      validations.push({
-        rule: 'dataType',
-        value: v.dataType,
-        description: describeValidation('dataType', v.dataType),
-      });
-    }
-
-    return {
-      id: el.id,
-      uuid: el.uuid,
-      label: el.label || el.id,
-      elementType: 'input',
-      validations: validations.length > 0 ? validations : undefined,
-    };
-  }
 
   const conditions: OutputCondition[] = [];
 
-  const hasAnyInputValidations = pageInputElements.some(
-    (inp) => inp.validations && Object.keys(inp.validations).length > 0
-  );
-  const hasFieldMatches = (el.fieldMatchConditions ?? []).length > 0;
+  // JSON expression conditions (structured)
+  for (const jsonCond of el.jsonConditions ?? []) {
+    if (!jsonCond.clauses || jsonCond.clauses.length === 0) continue;
 
-  if (hasAnyInputValidations || hasFieldMatches) {
-    conditions.push({
-      type: 'all_inputs_valid',
-      description:
-        'All input fields on this page must individually pass their validation rules (length, data type) before this button fires its action',
-    });
-  }
-
-  for (const cond of el.fieldMatchConditions ?? []) {
-    const f1Ref: OutputFieldRef = {
-      id: cond.field1Id,
-      uuid: cond.field1Uuid,
-      label: cond.field1Label,
-    };
-    const f2Ref: OutputFieldRef = {
-      id: cond.field2Id,
-      uuid: cond.field2Uuid,
-      label: cond.field2Label,
-    };
+    const expressionString = serializeConditionToExpression(jsonCond);
 
     conditions.push({
-      type: 'fields_match',
-      description: `The value entered in "${cond.field1Label}" must exactly equal the value entered in "${cond.field2Label}". If they differ, block the action and show an error on the second field.`,
-      fields: [f1Ref, f2Ref],
-      onMismatch: {
-        action: 'showError',
-        errorMessage: cond.errorMessage || 'The values do not match',
-        displayOn: f2Ref,
-      },
-    });
-  }
-
-  for (const customRule of el.customConditions ?? []) {
-    conditions.push({
-      type: 'custom_rule',
-      description: customRule.ruleDescription,
-      onMismatch: {
-        action: 'showError',
-        errorMessage: customRule.errorMessage || 'Custom condition failed',
-      },
+      type: 'json_expression',
+      description: `Evaluate: ${expressionString}`,
+      expression: expressionString,
+      outcomeKey: jsonCond.outcomeKey,
+      targetPageId: jsonCond.targetPageId,
+      clauseOperator: jsonCond.clauseOperator,
+      clauses: jsonCond.clauses.map(c => ({
+        leftField: c.leftField,
+        operator: c.operator,
+        rightType: c.rightType,
+        ...(c.rightType === 'field' ? { rightField: c.rightField } : { rightValue: c.rightValue }),
+      })),
+      onMismatch: jsonCond.errorMessage
+        ? { action: 'showError', errorMessage: jsonCond.errorMessage }
+        : undefined,
     });
   }
 
@@ -186,18 +114,38 @@ function serializeElement(
       secure_entry_routing:
         'Route to a page based on the format of the entered value (phone or card number)',
     };
-    onAllConditionsMet = {
-      actionType: el.actionType,
-      targetPageId: resolvedTargetPageId,
-      ...(el.actionType === 'api-call' && {
-        apiEndpoint: el.apiEndpoint,
-        method: el.method ?? 'POST',
-        outcomes: (el.outcomes ?? []).filter(
-          (o) => o.outcomeKey && o.targetPageId
-        ),
-      }),
-      description: actionDescriptions[el.actionType] ?? el.actionType,
-    };
+    if (el.actionType === 'navigate' && (el.jsonConditions ?? []).length > 0) {
+      const validConditions = el.jsonConditions!.filter(
+        c => c.clauses && c.clauses.length > 0 && c.targetPageId
+      );
+
+      const uniqueTargets = [...new Set(validConditions.map(c => c.targetPageId))];
+      const resolvedTargetPageId = uniqueTargets.length === 1 ? uniqueTargets[0] : null;
+
+      onAllConditionsMet = {
+        actionType: 'conditional_navigate',
+        targetPageId: resolvedTargetPageId,
+        description: 'Evaluate JSON conditions in order and navigate to the first matching target page',
+        outcomes: validConditions.map(c => ({
+          outcomeKey: c.outcomeKey,
+          targetPageId: c.targetPageId,
+          expression: serializeConditionToExpression(c),
+        })),
+      };
+    } else {
+      onAllConditionsMet = {
+        actionType: el.actionType,
+        targetPageId: resolvedTargetPageId,
+        ...(el.actionType === 'api-call' && {
+          apiEndpoint: el.apiEndpoint,
+          method: el.method ?? 'POST',
+          outcomes: (el.outcomes ?? []).filter(
+            (o) => o.outcomeKey && o.targetPageId
+          ),
+        }),
+        description: actionDescriptions[el.actionType] ?? el.actionType,
+      };
+    }
   }
 
   return {
@@ -213,7 +161,6 @@ function serializeElement(
 export function flowToOutputJson(
   nodes: Node[],
   edges: Edge[],
-  navMap: unknown,
 ): OutputJson {
   const rawPages: OutputPage[] = [];
 
@@ -221,12 +168,8 @@ export function flowToOutputJson(
     const page = (node.data as { page: PageDescriptor }).page;
     if (!page) continue;
 
-    const inputElements = page.actionElements.filter(
-      (el) => el.elementType === 'input'
-    );
-
     const elements: OutputElement[] = page.actionElements.map((el) =>
-      serializeElement(el, inputElements, page.id, edges)
+      serializeElement(el, page.id, edges)
     );
 
     rawPages.push({

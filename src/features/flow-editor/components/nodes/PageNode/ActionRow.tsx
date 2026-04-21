@@ -3,15 +3,17 @@ import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { useAppStore } from '@/shared/store';
 import type { ActionElement } from '@/shared/types/store';
+import { buildExpressionContext } from '@/features/flow-editor/utils/buildExpressionContext';
+import ExpressionBuilder from './ExpressionBuilder';
+import type { JsonCondition, ExpressionClause } from '@/shared/types/store';
 
 interface ActionRowProps {
   element: ActionElement;
   currentEdgeCount: number;
   pageId: string;
-  pageInputElements: ActionElement[];
 }
 
-export default function ActionRow({ element, currentEdgeCount, pageId, pageInputElements }: ActionRowProps) {
+export default function ActionRow({ element, currentEdgeCount, pageId }: ActionRowProps) {
   const [showPopup, setShowPopup] = useState(false);
   const pages = useAppStore((s) => s.pages);
   const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
@@ -30,7 +32,6 @@ export default function ActionRow({ element, currentEdgeCount, pageId, pageInput
   const handleBorderColor = isSaturated ? '#9ca3af' : '#ffffff';
 
   const displayLabel = element.label && element.label !== element.id ? element.label :
-    element.elementType === 'input' ? 'Input Field' :
     element.elementType === 'link' ? 'Link' : 'Button';
 
   return (
@@ -72,7 +73,7 @@ export default function ActionRow({ element, currentEdgeCount, pageId, pageInput
         </button>
       </div>
 
-      {element.elementType !== 'input' && (
+      {element.elementType !== 'link' && (
         element.actionType === 'secure_entry_routing' ? (
           <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 20 }}>
             {(element.outcomes || []).map((outcome, idx) => {
@@ -107,7 +108,6 @@ export default function ActionRow({ element, currentEdgeCount, pageId, pageInput
           element={element}
           pageId={pageId}
           pages={pages}
-          pageInputElements={pageInputElements}
           setPendingEdgeUpdate={setPendingEdgeUpdate as unknown as (edges: unknown[] | null) => void}
           onClose={() => setShowPopup(false)}
         />
@@ -120,14 +120,12 @@ function ActionConfigPopup({
   element,
   pageId,
   pages,
-  pageInputElements,
   setPendingEdgeUpdate,
   onClose,
 }: {
   element: ActionElement;
   pageId: string;
   pages: { id: string; name: string }[];
-  pageInputElements: ActionElement[];
   setPendingEdgeUpdate: (edges: unknown[] | null) => void;
   onClose: () => void;
 }) {
@@ -137,19 +135,31 @@ function ActionConfigPopup({
   const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'DELETE'>(element.method ?? 'POST');
   const [outcomes, setOutcomes] = useState<Array<{ outcomeKey: string; targetPageId: string }>>(element.outcomes ?? []);
   const [fallbackPageId, setFallbackPageId] = useState<string>(element.fallbackPageId || '');
-  const [minLength, setMinLength] = useState<number | ''>(element.validations?.minLength ?? '');
-  const [maxLength, setMaxLength] = useState<number | ''>(element.validations?.maxLength ?? '');
-  const [dataType, setDataType] = useState<'any' | 'numbers' | 'letters' | 'alphanumeric'>(element.validations?.dataType ?? 'any');
-  const [fieldMatchConditions, setFieldMatchConditions] = useState<Array<{ field1Id: string; field2Id: string; errorMessage: string }>>(
-    (element.fieldMatchConditions ?? []).map((c) => ({
-      field1Id: c.field1Id,
-      field2Id: c.field2Id,
-      errorMessage: c.errorMessage,
-    }))
+  
+  const allPages = useAppStore((s) => s.pages);
+  const expressionFields = buildExpressionContext(allPages);
+
+  const [jsonConditions, setJsonConditions] = useState<JsonCondition[]>(
+    element.jsonConditions ?? []
   );
-  const [customConditions, setCustomConditions] = useState<Array<{ ruleDescription: string; errorMessage: string }>>(
-    element.customConditions ?? []
-  );
+
+  const addJsonCondition = () => {
+    const defaultClause: ExpressionClause = {
+      leftField: expressionFields[0]?.path ?? '',
+      operator: '==',
+      rightType: 'value',
+      rightField: '',
+      rightValue: '',
+    };
+    const newCondition: JsonCondition = {
+      outcomeKey: `condition_${jsonConditions.length + 1}`,
+      targetPageId: '',
+      errorMessage: '',
+      clauseOperator: 'AND',
+      clauses: [defaultClause],
+    };
+    setJsonConditions(prev => [...prev, newCondition]);
+  };
 
   const handleActionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newVal = e.target.value;
@@ -170,42 +180,15 @@ function ActionConfigPopup({
   };
 
   const handleSave = () => {
-    if (element.elementType === 'input') {
-      const validations: ActionElement['validations'] = {};
-      if (minLength !== '') validations.minLength = Number(minLength);
-      if (maxLength !== '') validations.maxLength = Number(maxLength);
-      if (dataType !== 'any') validations.dataType = dataType;
-
-      useAppStore.getState().updateActionElement(pageId, element.id, {
-        label,
-        actionType: 'none',
-        validations: Object.keys(validations).length > 0 ? validations : undefined,
-        fieldMatchConditions: undefined,
-      });
-      onClose();
-      return;
-    }
-
-    const enrichedConditions = fieldMatchConditions
-      .filter((c) => c.field1Id && c.field2Id && c.field1Id !== c.field2Id)
-      .map((c) => {
-        const f1 = pageInputElements.find((el) => el.id === c.field1Id);
-        const f2 = pageInputElements.find((el) => el.id === c.field2Id);
-        return {
-          field1Id: c.field1Id,
-          field1Label: f1?.label ?? c.field1Id,
-          field1Uuid: f1?.uuid,
-          field2Id: c.field2Id,
-          field2Label: f2?.label ?? c.field2Id,
-          field2Uuid: f2?.uuid,
-          errorMessage: c.errorMessage,
-        };
-      });
 
     const isAdvanced = actionType === 'api-call' || actionType === 'secure_entry_routing';
     
-    const validCustomConditions = customConditions.filter(
-      (c) => c.ruleDescription.trim() !== ''
+    // Validate: condition needs outcomeKey, targetPageId, and at least one complete clause
+    const validJsonConditions = jsonConditions.filter(c =>
+      c.outcomeKey.trim() !== '' &&
+      c.targetPageId !== '' &&
+      c.clauses.length > 0 &&
+      c.clauses.every(cl => cl.leftField !== '' && (cl.rightType === 'value' ? cl.rightValue !== '' : cl.rightField !== ''))
     );
 
     const updates: Partial<ActionElement> = {
@@ -216,9 +199,7 @@ function ActionConfigPopup({
       outcomes: isAdvanced ? outcomes : [],
       fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined,
       navigateTo: null,
-      validations: undefined,
-      fieldMatchConditions: enrichedConditions,
-      customConditions: validCustomConditions.length > 0 ? validCustomConditions : undefined,
+      jsonConditions: validJsonConditions.length > 0 ? validJsonConditions : undefined,
     };
 
     useAppStore.getState().updateActionElement(pageId, element.id, updates);
@@ -233,6 +214,7 @@ function ActionConfigPopup({
       const validOutcomes = outcomes.filter((o) => o.outcomeKey && o.targetPageId);
       const isRouteColored = actionType === 'secure_entry_routing';
       const routeColor = '#ec4899';
+      const strokeColor = isRouteColored ? routeColor : '#f59e0b';
       const newEdges = validOutcomes.map((outcome) => ({
         id: `edge-${pageId}-${element.id}-${outcome.outcomeKey}-${outcome.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         type: 'deletable',
@@ -241,15 +223,36 @@ function ActionConfigPopup({
         target: outcome.targetPageId,
         targetHandle: 'entry',
         animated: true,
-        style: { stroke: isRouteColored ? routeColor : '#f59e0b', strokeWidth: 2 },
-        markerEnd: { type: 'arrowclosed', color: isRouteColored ? routeColor : '#f59e0b' },
+        style: { stroke: strokeColor, strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: strokeColor },
         label: outcome.outcomeKey,
         data: { actionType, apiEndpoint: apiEndpoint || null, method, outcomes: validOutcomes, fallbackPageId: actionType === 'secure_entry_routing' ? fallbackPageId : undefined },
       }));
       setPendingEdgeUpdate([...edgesWithoutThisHandle, ...newEdges]);
+    } else if (actionType === 'navigate' && validJsonConditions.length > 0) {
+      const currentFlowEdges = useAppStore.getState().flowEdges;
+      const edgesWithoutThisHandle = currentFlowEdges.filter(
+        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+      );
+      const conditionEdges = validJsonConditions.map((cond) => ({
+        id: `edge-${pageId}-${element.id}-${cond.outcomeKey}-${cond.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'deletable',
+        source: pageId,
+        sourceHandle: element.id,
+        target: cond.targetPageId,
+        targetHandle: 'entry',
+        animated: true,
+        style: { stroke: '#8b5cf6', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: '#8b5cf6' },
+        label: cond.outcomeKey,
+        data: { actionType: 'navigate', outcomeKey: cond.outcomeKey },
+      }));
+      setPendingEdgeUpdate([...edgesWithoutThisHandle, ...conditionEdges]);
     } else {
       const currentFlowEdges = useAppStore.getState().flowEdges;
-      const updatedEdges = currentFlowEdges.filter((e) => !(e.source === pageId && e.sourceHandle === element.id));
+      const updatedEdges = currentFlowEdges.filter(
+        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+      );
       setPendingEdgeUpdate(updatedEdges);
     }
     onClose();
@@ -261,29 +264,13 @@ function ActionConfigPopup({
   return (
     <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1000, background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: 16, width: 280, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', fontFamily: 'system-ui, sans-serif', maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
       <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', marginBottom: 12 }}>
-        Configure: {element.label !== element.id ? element.label : element.elementType === 'input' ? 'Input Field' : 'Button'}
+        Configure: {element.label !== element.id ? element.label : element.elementType === 'link' ? 'Link' : 'Button'}
       </div>
 
       <label style={labelStyle}>Element Label</label>
       <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Submit Button" style={inputStyle} />
 
-      {element.elementType === 'input' ? (
-        <>
-          <label style={labelStyle}>Min Length</label>
-          <input type="number" value={minLength} onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : '')} placeholder="e.g. 10" style={inputStyle} />
-
-          <label style={labelStyle}>Max Length</label>
-          <input type="number" value={maxLength} onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : '')} placeholder="e.g. 16" style={inputStyle} />
-
-          <label style={labelStyle}>Data Type</label>
-          <select value={dataType} onChange={(e) => setDataType(e.target.value as typeof dataType)} style={inputStyle}>
-            <option value="any">Any</option>
-            <option value="numbers">Numbers only</option>
-            <option value="letters">Letters only</option>
-            <option value="alphanumeric">Alphanumeric</option>
-          </select>
-        </>
-      ) : (
+      {
         <>
           <label style={labelStyle}>Action type</label>
           <select value={actionType} onChange={handleActionTypeChange} style={inputStyle}>
@@ -346,146 +333,47 @@ function ActionConfigPopup({
             </>
           )}
 
-          <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
-                Field Match Conditions ({fieldMatchConditions.length})
-              </span>
-              <button
-                onClick={() =>
-                  setFieldMatchConditions((prev) => [
-                    ...prev,
-                    { field1Id: '', field2Id: '', errorMessage: '' },
-                  ])
-                }
-                style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #3b82f6', background: 'transparent', color: '#3b82f6', cursor: 'pointer' }}
-              >
-                + Add
-              </button>
-            </div>
-
-            {pageInputElements.length < 2 && (
-              <p style={{ fontSize: 10, color: '#94a3b8', margin: '4px 0 8px' }}>
-                Need at least 2 input fields on this page to add a match condition.
-              </p>
-            )}
-
-            {fieldMatchConditions.map((cond, i) => (
-              <div
-                key={i}
-                style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>Condition {i + 1}</span>
-                  <button
-                    onClick={() => setFieldMatchConditions((prev) => prev.filter((_, idx) => idx !== i))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11, padding: 0 }}
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                <label style={labelStyle}>Field 1</label>
-                <select
-                  value={cond.field1Id}
-                  onChange={(e) =>
-                    setFieldMatchConditions((prev) =>
-                      prev.map((c, idx) => idx === i ? { ...c, field1Id: e.target.value } : c)
-                    )
-                  }
-                  style={inputStyle}
+          {/* JSON Expression Conditions section */}
+          {actionType === 'navigate' && (
+            <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
+                  Conditional Routes ({jsonConditions.length})
+                </span>
+                <button
+                  onClick={addJsonCondition}
+                  style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #3b82f6', background: 'transparent', color: '#3b82f6', cursor: 'pointer' }}
                 >
-                  <option value="">— select input field —</option>
-                  {pageInputElements.map((el) => (
-                    <option key={el.id} value={el.id}>{el.label || el.id}</option>
-                  ))}
-                </select>
-
-                <label style={labelStyle}>must equal Field 2</label>
-                <select
-                  value={cond.field2Id}
-                  onChange={(e) =>
-                    setFieldMatchConditions((prev) =>
-                      prev.map((c, idx) => idx === i ? { ...c, field2Id: e.target.value } : c)
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  <option value="">— select input field —</option>
-                  {pageInputElements.map((el) => (
-                    <option key={el.id} value={el.id}>{el.label || el.id}</option>
-                  ))}
-                </select>
-
-                <label style={labelStyle}>Error message if they don't match</label>
-                <input
-                  type="text"
-                  value={cond.errorMessage}
-                  onChange={(e) =>
-                    setFieldMatchConditions((prev) =>
-                      prev.map((c, idx) => idx === i ? { ...c, errorMessage: e.target.value } : c)
-                    )
-                  }
-                  placeholder="e.g. Los números no coinciden"
-                  style={inputStyle}
-                />
+                  + Add route
+                </button>
               </div>
-            ))}
-          </div>
 
-          <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
-                Custom Conditions ({customConditions.length})
-              </span>
-              <button
-                onClick={() => setCustomConditions((prev) => [...prev, { ruleDescription: '', errorMessage: '' }])}
-                style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, border: '1px solid #3b82f6', background: 'transparent', color: '#3b82f6', cursor: 'pointer' }}
-              >
-                + Add
-              </button>
+              {jsonConditions.length === 0 && (
+                <p style={{ fontSize: 10, color: '#94a3b8', margin: '4px 0 8px' }}>
+                  Add conditional routes to navigate to different pages based on field values.
+                  Each route evaluates one or more clauses joined by AND / OR.
+                </p>
+              )}
+
+              {jsonConditions.map((condition, i) => (
+                <ExpressionBuilder
+                  key={i}
+                  condition={condition}
+                  conditionIndex={i}
+                  availableFields={expressionFields}
+                  pages={pages}
+                  onChange={(updated) =>
+                    setJsonConditions(prev => prev.map((c, idx) => idx === i ? updated : c))
+                  }
+                  onRemove={() =>
+                    setJsonConditions(prev => prev.filter((_, idx) => idx !== i))
+                  }
+                />
+              ))}
             </div>
-            
-            {customConditions.length === 0 && (
-              <p style={{ fontSize: 10, color: '#94a3b8', margin: '4px 0 8px' }}>
-                Add custom developer rules (e.g., &quot;User is logged in&quot;, &quot;Cart total &gt; 0&quot;).
-              </p>
-            )}
-
-            {customConditions.map((cond, i) => (
-              <div key={i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>Custom Rule {i + 1}</span>
-                  <button
-                    onClick={() => setCustomConditions((prev) => prev.filter((_, idx) => idx !== i))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11, padding: 0 }}
-                  >
-                    Remove
-                  </button>
-                </div>
-                
-                <label style={labelStyle}>Condition Description</label>
-                <input
-                  type="text"
-                  value={cond.ruleDescription}
-                  onChange={(e) => setCustomConditions((prev) => prev.map((c, idx) => idx === i ? { ...c, ruleDescription: e.target.value } : c))}
-                  placeholder="e.g. User account status must be active"
-                  style={inputStyle}
-                />
-                
-                <label style={labelStyle}>Error message if rule fails</label>
-                <input
-                  type="text"
-                  value={cond.errorMessage}
-                  onChange={(e) => setCustomConditions((prev) => prev.map((c, idx) => idx === i ? { ...c, errorMessage: e.target.value } : c))}
-                  placeholder="e.g. Account is inactive."
-                  style={inputStyle}
-                />
-              </div>
-            ))}
-          </div>
+          )}
         </>
-      )}
+      }
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
         <button onClick={onClose} style={{ padding: '5px 14px', fontSize: 11, borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', color: '#334155' }}>Cancel</button>
