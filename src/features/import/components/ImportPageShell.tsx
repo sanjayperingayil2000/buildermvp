@@ -8,6 +8,7 @@ import FileStatusCard from './FileStatusCard';
 import { readAndValidateFile, mergeManifests } from '../utils/mergeManifests';
 import { parseManifestToFlow } from '@/shared/lib/parseManifestToFlow';
 import { useAppStore } from '@/shared/store';
+import type { RawManifestPage, BuildConfig } from '@/shared/store';
 import type { Manifest } from '@/shared/types/manifest';
 
 interface FileValidation {
@@ -24,11 +25,39 @@ export default function ImportPageShell() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<FileValidation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [rawPages, setRawPages] = useState<RawManifestPage[]>([]);
+  const [detectedBuildConfig, setDetectedBuildConfig] = useState<BuildConfig | null>(null);
 
   const processFiles = useCallback(async (files: File[]) => {
     setIsLoading(true);
     const results = await Promise.all(files.map(readAndValidateFile));
     setUploadedFiles((prev) => [...prev, ...results]);
+
+    // Extract raw manifest pages and detect build configs via structural checks
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+
+        // Detect build config: has theme_light + theme_dark + typography at top level
+        if (parsed.theme_light && parsed.theme_dark && parsed.typography) {
+          setDetectedBuildConfig(parsed as BuildConfig);
+          continue;
+        }
+
+        // Structural check: pages with 'widgets' arrays → raw manifest pages
+        if (Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+          const firstPage = parsed.pages[0] as Record<string, unknown>;
+          if ('widgets' in firstPage) {
+            const pages = parsed.pages as RawManifestPage[];
+            setRawPages((prev) => [...prev, ...pages.filter((p) => p.widgets && p.widgets.length > 0)]);
+          }
+        }
+      } catch {
+        // Ignore parse errors — readAndValidateFile already handles these
+      }
+    }
+
     setIsLoading(false);
   }, []);
 
@@ -66,8 +95,18 @@ export default function ImportPageShell() {
     useAppStore.getState().setFlowNodes(nodes);
     useAppStore.getState().setFlowEdges(edges);
 
+    // Persist raw manifest pages (full widget + props data) for Next.js export
+    if (rawPages.length > 0) {
+      useAppStore.getState().setRawManifestPages(rawPages);
+    }
+
+    // Persist build config if one was detected
+    if (detectedBuildConfig) {
+      useAppStore.getState().setBuildConfig(detectedBuildConfig);
+    }
+
     router.push('/flow-editor');
-  }, [uploadedFiles, router]);
+  }, [uploadedFiles, router, rawPages, detectedBuildConfig]);
 
   const handleReset = useCallback(() => {
     setUploadedFiles([]);

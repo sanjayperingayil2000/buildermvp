@@ -2,7 +2,7 @@ import type { Manifest, ManifestPage } from '@/shared/types/manifest';
 
 const SKIP_TYPES = new Set([
   'toolbar', 'header', 'appbar', 'navigationbar', 'divider',
-  'spacer', 'text', 'image', 'icon', 'label',
+  'spacer', 'image', 'icon', 'label',
 ]);
 
 interface RawWidget {
@@ -14,16 +14,15 @@ interface RawWidget {
   widgets?: RawWidget[];
 }
 
-interface RawV2Page {
+interface RawWidgetPage {
   id?: string;
   uuid?: string;
   name?: string;
   widgets?: RawWidget[];
 }
 
-interface RawV2Manifest {
-  manifest_version?: string;
-  pages?: RawV2Page[];
+interface RawWidgetManifest {
+  pages?: RawWidgetPage[];
 }
 
 function resolveElementType(type: string): 'input' | 'button' | 'link' | null {
@@ -50,8 +49,8 @@ function resolveLabel(widget: RawWidget): string {
   );
 }
 
-export function normalizeV2Manifest(rawJson: unknown): Manifest {
-  const raw = rawJson as RawV2Manifest;
+export function normalizeWidgetManifest(rawJson: unknown): Manifest {
+  const raw = rawJson as RawWidgetManifest;
   const rawPages = raw.pages ?? [];
 
   const pages: ManifestPage[] = rawPages.map((page) => {
@@ -59,7 +58,7 @@ export function normalizeV2Manifest(rawJson: unknown): Manifest {
     const elements = widgets
       .filter((w) => {
         const t = (w.type ?? '').toLowerCase();
-        return !Array.from(SKIP_TYPES).some((skip) => t.includes(skip));
+        return ![...SKIP_TYPES].some((skip) => t.includes(skip));
       })
       .flatMap((w) => {
         const type = w.type ?? '';

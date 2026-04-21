@@ -23,14 +23,13 @@ export function parseManifestToFlow(manifest: Manifest): {
     const actionElements: ActionElement[] = elements.map((element) => {
       const elementType: ActionElement['elementType'] =
         element.type === 'input' ? 'input'
-        : element.type === 'link' ? 'link'
-        : 'button';
+          : element.type === 'link' ? 'link'
+            : 'button';
 
       return {
         id: element.id,
         uuid: element.uuid,
         label: element.name,
-        tagName: element.type,
         elementType,
         actionType: 'none' as const,
         navigateTo: null,

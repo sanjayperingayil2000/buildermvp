@@ -85,6 +85,8 @@ function describeValidation(rule: string, value: number | string): string {
 function serializeElement(
   el: ActionElement,
   pageInputElements: ActionElement[],
+  pageId: string,
+  edges: Edge[],
 ): OutputElement {
   if (el.elementType === 'input') {
     const validations: OutputValidation[] = [];
@@ -172,6 +174,12 @@ function serializeElement(
 
   let onAllConditionsMet: OutputOnSuccess | undefined;
   if (el.actionType && el.actionType !== 'none') {
+    // Resolve target page from the actual canvas edge (el.navigateTo is always null)
+    const connectedEdge = edges.find(
+      (e) => e.source === pageId && e.sourceHandle === el.id
+    );
+    const resolvedTargetPageId = el.navigateTo ?? connectedEdge?.target ?? null;
+
     const actionDescriptions: Record<string, string> = {
       navigate: 'Navigate to the configured target page',
       'api-call': `Call the API endpoint (${el.method ?? 'POST'} ${el.apiEndpoint ?? 'unset'}) and route based on the outcome`,
@@ -180,7 +188,7 @@ function serializeElement(
     };
     onAllConditionsMet = {
       actionType: el.actionType,
-      targetPageId: el.navigateTo ?? null,
+      targetPageId: resolvedTargetPageId,
       ...(el.actionType === 'api-call' && {
         apiEndpoint: el.apiEndpoint,
         method: el.method ?? 'POST',
@@ -218,7 +226,7 @@ export function flowToOutputJson(
     );
 
     const elements: OutputElement[] = page.actionElements.map((el) =>
-      serializeElement(el, inputElements)
+      serializeElement(el, inputElements, page.id, edges)
     );
 
     rawPages.push({

@@ -4,6 +4,34 @@ import { persist } from 'zustand/middleware';
 import type { PageDescriptor, ActionElement, NavMapEntry } from '../types/store';
 import type { Node, Edge } from '@xyflow/react';
 
+/** Raw manifest widget shape preserved from upload (with full props) */
+export interface RawManifestWidget {
+  uuid: string;
+  id: string;
+  type: string;
+  props: Record<string, unknown>;
+  state_variants?: Record<string, Record<string, unknown>>;
+}
+
+export interface RawManifestPage {
+  id: string;
+  uuid?: string;
+  name: string;
+  route?: string;
+  widgets: RawManifestWidget[];
+}
+
+export interface BuildConfig {
+  theme_light: Record<string, string>;
+  theme_dark: Record<string, string>;
+  typography: Record<string, {
+    size: number;
+    weight: number;
+    line_height: number;
+    letter_spacing: number;
+  }> & { font_family: string };
+}
+
 interface AppState {
   pages: PageDescriptor[];
   flowNodes: Node[];
@@ -14,6 +42,11 @@ interface AppState {
   toastMessage: string | null;
   toastType: 'success' | 'error' | 'info';
 
+  /** Raw manifest pages with full widget + props data (for Next.js export) */
+  rawManifestPages: RawManifestPage[] | null;
+  /** Build config JSON with theme colours and typography (for Next.js export) */
+  buildConfig: BuildConfig | null;
+
   setPages: (pages: PageDescriptor[]) => void;
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
@@ -21,6 +54,8 @@ interface AppState {
   setPendingEdgeUpdate: (edges: Edge[] | null) => void;
   setLoading: (isLoading: boolean) => void;
   setToast: (message: string | null, type?: 'success' | 'error' | 'info') => void;
+  setRawManifestPages: (pages: RawManifestPage[]) => void;
+  setBuildConfig: (config: BuildConfig) => void;
 
   hideActionElement: (pageId: string, elementId: string) => void;
   restoreActionElement: (pageId: string, elementId: string) => void;
@@ -38,6 +73,8 @@ export const useAppStore = create<AppState>()(
       isLoading: false,
       toastMessage: null,
       toastType: 'info',
+      rawManifestPages: null,
+      buildConfig: null,
 
       setPages: (newPages) => set((state) => {
         const validPageIds = new Set(newPages.map((p) => p.id));
@@ -62,6 +99,8 @@ export const useAppStore = create<AppState>()(
       setPendingEdgeUpdate: (edges) => set({ pendingEdgeUpdate: edges }),
       setLoading: (isLoading) => set({ isLoading }),
       setToast: (message, type = 'info') => set({ toastMessage: message, toastType: type }),
+      setRawManifestPages: (pages) => set({ rawManifestPages: pages }),
+      setBuildConfig: (config) => set({ buildConfig: config }),
 
       hideActionElement: (pageId, elementId) => set((state) => {
         const cleanedEdges = state.flowEdges.filter(
@@ -125,6 +164,8 @@ export const useAppStore = create<AppState>()(
         flowNodes: state.flowNodes,
         flowEdges: state.flowEdges,
         navMap: state.navMap,
+        rawManifestPages: state.rawManifestPages,
+        buildConfig: state.buildConfig,
       }),
     }
   )

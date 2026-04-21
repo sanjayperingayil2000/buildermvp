@@ -1,6 +1,6 @@
 import type { Manifest } from '@/shared/types/manifest';
 import { normalizeFlutterManifest } from '@/shared/lib/adapters/flutterManifestAdapter';
-import { normalizeV2Manifest } from '@/shared/lib/adapters/v2ManifestAdapter';
+import { normalizeWidgetManifest } from '@/shared/lib/adapters/widgetManifestAdapter';
 import { validateManifest } from '@/shared/lib/validators/manifestValidator';
 
 export function readAndValidateFile(file: File): Promise<{ fileName: string; status: 'success' | 'error'; errorMessage?: string; manifest?: Manifest; screenCount: number }> {
@@ -14,24 +14,31 @@ export function readAndValidateFile(file: File): Promise<{ fileName: string; sta
       try {
         const text = e.target?.result as string;
         let parsed = JSON.parse(text);
-        
+
         const rawJson = parsed as Record<string, unknown>;
-        
-        // Check for v2.0 manifest first - never treat as Flutter
-        if (rawJson.manifest_version === '2.0') {
-          parsed = normalizeV2Manifest(rawJson);
+
+        // Structural detection — duck-type by inspecting the first page's shape
+        if (Array.isArray(rawJson.pages) && rawJson.pages.length > 0) {
+          const firstPage = rawJson.pages[0] as Record<string, unknown>;
+
+          // Pages with 'widgets' → widget manifest, needs normalisation
+          if ('widgets' in firstPage) {
+            parsed = normalizeWidgetManifest(rawJson);
+          }
+          // Pages with 'children'/'child' → Flutter format
+          else if ('children' in firstPage || 'child' in firstPage) {
+            parsed = normalizeFlutterManifest(rawJson);
+          }
+          // Pages with 'elements' → already internal format, pass through
+          // (no transformation needed)
         } else if (
-          rawJson.targetPlatform === 'flutter' || 
-          rawJson.flutterNotes || 
-          (Array.isArray(rawJson.pages) && rawJson.pages.length > 0 && typeof rawJson.pages[0] === 'object' && (
-            'children' in (rawJson.pages[0] as Record<string, unknown>) ||
-            'child' in (rawJson.pages[0] as Record<string, unknown>)
-          ))
+          rawJson.targetPlatform === 'flutter' ||
+          rawJson.flutterNotes
         ) {
-          // Only check for children/child, NOT widgets - widgets are v2.0 format
+          // Top-level Flutter markers (no pages array structure to inspect)
           parsed = normalizeFlutterManifest(rawJson);
         }
-        
+
         const errors = validateManifest(parsed);
         if (errors.length > 0) {
           resolve({ fileName: file.name, status: 'error', errorMessage: errors.join(', '), screenCount: 0 });

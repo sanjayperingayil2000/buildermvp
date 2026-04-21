@@ -9,7 +9,6 @@ export interface ActionElement {
   id: string;
   uuid?: string;
   label: string;
-  tagName: string;
   elementType?: 'button' | 'link' | 'input';
   actionType: string;
   navigateTo: string | null;
