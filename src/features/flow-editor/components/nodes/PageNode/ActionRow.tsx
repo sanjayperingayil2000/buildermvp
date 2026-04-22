@@ -16,8 +16,8 @@ interface ActionRowProps {
 
 export default function ActionRow({ element, currentEdgeCount, pageId }: ActionRowProps) {
   const [showPopup, setShowPopup] = useState(false);
-  const pages = useAppStore((s) => s.pages);
-  const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
+  const activeProject = useAppStore((s) => s.getActiveProject());
+  const pages = activeProject?.pages ?? [];
 
   const actionColor =
     element.actionType === 'navigate' ? '#3b82f6' :
@@ -109,7 +109,6 @@ export default function ActionRow({ element, currentEdgeCount, pageId }: ActionR
           element={element}
           pageId={pageId}
           pages={pages}
-          setPendingEdgeUpdate={setPendingEdgeUpdate as unknown as (edges: unknown[] | null) => void}
           onClose={() => setShowPopup(false)}
         />
       )}
@@ -121,13 +120,11 @@ function ActionConfigPopup({
   element,
   pageId,
   pages,
-  setPendingEdgeUpdate,
   onClose,
 }: {
   element: ActionElement;
   pageId: string;
   pages: { id: string; name: string }[];
-  setPendingEdgeUpdate: (edges: unknown[] | null) => void;
   onClose: () => void;
 }) {
   const [label, setLabel] = useState(element.label);
@@ -137,7 +134,9 @@ function ActionConfigPopup({
   const [outcomes, setOutcomes] = useState<Array<{ outcomeKey: string; targetPageId: string }>>(element.outcomes ?? []);
   const [fallbackPageId, setFallbackPageId] = useState<string>(element.fallbackPageId || '');
   
-  const allPages = useAppStore((s) => s.pages);
+  const activeProject = useAppStore((s) => s.getActiveProject());
+  const setFlowEdges = useAppStore((s) => s.setFlowEdges);
+  const allPages = activeProject?.pages ?? [];
 
   const initialEndpoint = element.apiEndpoint
     ? API_ENDPOINT_CATALOG.find(e => e.id === element.apiEndpoint) ?? null
@@ -226,8 +225,9 @@ function ActionConfigPopup({
 
     useAppStore.getState().updateActionElement(pageId, element.id, updates);
 
+    const currentFlowEdges = activeProject?.flowEdges ?? [];
+    
     if (actionType === 'secure_entry_routing') {
-      const currentFlowEdges = useAppStore.getState().flowEdges;
       const edgesWithoutThisHandle = currentFlowEdges.filter(
         (e) => e.source !== pageId || !e.sourceHandle?.startsWith(element.id)
       );
@@ -245,12 +245,11 @@ function ActionConfigPopup({
         markerEnd: { type: 'arrowclosed', color: strokeColor },
         label: outcome.outcomeKey,
         data: { actionType, apiEndpoint: apiEndpoint || null, method, outcomes: validOutcomes, fallbackPageId },
-      }));
-      setPendingEdgeUpdate([...edgesWithoutThisHandle, ...newEdges]);
+      } as any));
+      setFlowEdges([...edgesWithoutThisHandle, ...newEdges]);
     } else if (actionType === 'api-call') {
-      const currentFlowEdges = useAppStore.getState().flowEdges;
       const edgesWithoutThis = currentFlowEdges.filter(
-        e => !(e.source === pageId && e.sourceHandle === element.id)
+        (e: any) => !(e.source === pageId && e.sourceHandle === element.id)
       );
       const conditionEdges = validJsonConditions.map(cond => ({
         id: `edge-${pageId}-${element.id}-${cond.outcomeKey}-${cond.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -264,12 +263,11 @@ function ActionConfigPopup({
         markerEnd: { type: 'arrowclosed', color: '#f59e0b' },
         label: cond.outcomeKey,
         data: { actionType: 'api-call', outcomeKey: cond.outcomeKey, endpointId: selectedEndpointId },
-      }));
-      setPendingEdgeUpdate([...edgesWithoutThis, ...conditionEdges]);
+      } as any));
+      setFlowEdges([...edgesWithoutThis, ...conditionEdges]);
     } else if (actionType === 'navigate' && validJsonConditions.length > 0) {
-      const currentFlowEdges = useAppStore.getState().flowEdges;
       const edgesWithoutThisHandle = currentFlowEdges.filter(
-        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+        (e: any) => !(e.source === pageId && e.sourceHandle === element.id)
       );
       const conditionEdges = validJsonConditions.map((cond) => ({
         id: `edge-${pageId}-${element.id}-${cond.outcomeKey}-${cond.targetPageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -283,14 +281,13 @@ function ActionConfigPopup({
         markerEnd: { type: 'arrowclosed', color: '#8b5cf6' },
         label: cond.outcomeKey,
         data: { actionType: 'navigate', outcomeKey: cond.outcomeKey },
-      }));
-      setPendingEdgeUpdate([...edgesWithoutThisHandle, ...conditionEdges]);
+      } as any));
+      setFlowEdges([...edgesWithoutThisHandle, ...conditionEdges]);
     } else {
-      const currentFlowEdges = useAppStore.getState().flowEdges;
       const updatedEdges = currentFlowEdges.filter(
-        (e) => !(e.source === pageId && e.sourceHandle === element.id)
+        (e: any) => !(e.source === pageId && e.sourceHandle === element.id)
       );
-      setPendingEdgeUpdate(updatedEdges);
+      setFlowEdges(updatedEdges);
     }
     onClose();
   };

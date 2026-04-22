@@ -12,9 +12,10 @@ interface PageNodeData {
 
 export default function PageNode({ data, selected }: NodeProps) {
   const { page } = data as PageNodeData;
-  const flowEdges = useAppStore((s) => s.flowEdges);
-  const startingPageId = useAppStore((s) => s.startingPageId);
-  const setStartingPageId = useAppStore((s) => s.setStartingPageId);
+  const activeProject = useAppStore((s) => s.getActiveProject());
+  const setStartingPage = useAppStore((s) => s.setStartingPage);
+  const flowEdges = activeProject?.flowEdges ?? [];
+  const startingPageId = activeProject?.startingPageId ?? null;
   const isStartingPage = startingPageId === page.id;
   const activeElements = page.actionElements.filter((el: ActionElement) => !el.isHidden && el.elementType !== 'input');
   const hiddenElements = page.actionElements.filter((el: ActionElement) => el.isHidden);
@@ -102,7 +103,7 @@ export default function PageNode({ data, selected }: NodeProps) {
         <input
           type="checkbox"
           checked={isStartingPage}
-          onChange={() => setStartingPageId(isStartingPage ? null : page.id)}
+          onChange={() => setStartingPage(isStartingPage ? null : page.id)}
           style={{
             width: 14,
             height: 14,

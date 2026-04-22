@@ -4,8 +4,9 @@ import { useAppStore } from '@/shared/store';
 import { isValidConnection } from '../utils/edgeHelpers';
 
 export function useConnectionRules() {
-  const edges = useAppStore((s) => s.flowEdges);
-  const pages = useAppStore((s) => s.pages);
+  const activeProject = useAppStore((s) => s.getActiveProject());
+  const edges = activeProject?.flowEdges ?? [];
+  const pages = activeProject?.pages ?? [];
 
   const checkConnection = useCallback(
     (connection: Connection): boolean => {

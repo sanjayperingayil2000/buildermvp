@@ -91,21 +91,29 @@ export default function ImportPageShell() {
     const mergedManifest = mergeManifests(validManifests);
     const { nodes, edges, pages } = parseManifestToFlow(mergedManifest);
 
-    useAppStore.getState().setPages(pages);
-    useAppStore.getState().setFlowNodes(nodes);
-    useAppStore.getState().setFlowEdges(edges);
+    const projectName = `Project ${new Date().toLocaleDateString()}`;
+    
+    useAppStore.getState().addProject({
+      name: projectName,
+      pages,
+      flowNodes: nodes,
+      flowEdges: edges,
+      navMap: [],
+      rawManifestPages: rawPages.length > 0 ? rawPages : [],
+      buildConfig: detectedBuildConfig,
+      startingPageId: null,
+      config: {
+        initialRoute: null,
+        baseUrl: 'https://api.example.com',
+      },
+    });
 
-    // Persist raw manifest pages (full widget + props data) for Next.js export
-    if (rawPages.length > 0) {
-      useAppStore.getState().setRawManifestPages(rawPages);
+    const newProjectId = useAppStore.getState().activeProjectId;
+    if (newProjectId) {
+      router.push(`/project/${newProjectId}`);
+    } else {
+      router.push('/');
     }
-
-    // Persist build config if one was detected
-    if (detectedBuildConfig) {
-      useAppStore.getState().setBuildConfig(detectedBuildConfig);
-    }
-
-    router.push('/flow-editor');
   }, [uploadedFiles, router, rawPages, detectedBuildConfig]);
 
   const handleReset = useCallback(() => {

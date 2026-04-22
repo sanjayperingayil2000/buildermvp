@@ -5,11 +5,13 @@ import { computeNodes } from '../utils/computeNodes';
 
 export function useFlowSync() {
   const hasInitialised = useRef(false);
-  const pages = useAppStore((s) => s.pages);
-  const pendingEdgeUpdate = useAppStore((s) => s.pendingEdgeUpdate);
-  const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
-  const storedNodes = useAppStore.getState().flowNodes;
-  const storedEdges = useAppStore.getState().flowEdges;
+  const activeProject = useAppStore((s) => s.getActiveProject());
+  const setFlowNodes = useAppStore((s) => s.setFlowNodes);
+  const setFlowEdges = useAppStore((s) => s.setFlowEdges);
+  
+  const pages = activeProject?.pages ?? [];
+  const storedNodes = activeProject?.flowNodes ?? [];
+  const storedEdges = activeProject?.flowEdges ?? [];
 
   const initNodes = useCallback((): Node[] => {
     const nodes = computeNodes(pages, storedNodes);
@@ -17,22 +19,20 @@ export function useFlowSync() {
   }, [pages, storedNodes]);
 
   const initEdges = useCallback((): Edge[] => {
-    return storedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' }));
+    return storedEdges.map((e: Edge) => ({ ...e, type: e.type ?? 'deletable' }));
   }, [storedEdges]);
 
   const syncNodesToStore = useCallback((nodes: Node[]) => {
-    useAppStore.getState().setFlowNodes(nodes);
-  }, []);
+    setFlowNodes(nodes);
+  }, [setFlowNodes]);
 
   const syncEdgesToStore = useCallback((edges: Edge[]) => {
-    useAppStore.getState().setFlowEdges(edges);
-  }, []);
+    setFlowEdges(edges);
+  }, [setFlowEdges]);
 
-  const applyPendingEdgeUpdate = useCallback((setEdges: (edges: Edge[]) => void) => {
-    if (pendingEdgeUpdate === null) return;
-    setEdges(pendingEdgeUpdate.map((e) => ({ ...e, type: e.type ?? 'deletable' })));
-    setPendingEdgeUpdate(null);
-  }, [pendingEdgeUpdate, setPendingEdgeUpdate]);
+  const applyPendingEdgeUpdate = useCallback((_setEdges: (edges: Edge[]) => void) => {
+    // no-op - edge updates are handled locally
+  }, []);
 
   return {
     hasInitialised,

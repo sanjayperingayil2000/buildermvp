@@ -1,5 +1,5 @@
-import FlowCanvas from '@/features/flow-editor/components/FlowCanvas';
+import { redirect } from 'next/navigation';
 
-export default function FlowEditorPage() {
-  return <FlowCanvas />;
+export default function FlowEditorRedirect() {
+  redirect('/');
 }

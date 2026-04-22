@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ReactFlow,
@@ -33,11 +34,66 @@ import { flowToOutputJson } from '@/features/export/utils/flowToOutputJson';
 import { downloadOutputJson } from '@/features/export/utils/downloadOutputJson';
 import { GRID_CONSTANTS } from '@/config/constants';
 
-export default function FlowCanvas() {
+export default function ProjectCanvasPage() {
+  const params = useParams();
+  const router = useRouter();
+  const projectId = params.id as string;
+
+  const setActiveProject = useAppStore((s) => s.setActiveProject);
   const activeProject = useAppStore((s) => s.getActiveProject());
+  const updateProjectName = useAppStore((s) => s.updateProjectName);
   const setFlowNodes = useAppStore((s) => s.setFlowNodes);
   const setFlowEdges = useAppStore((s) => s.setFlowEdges);
   const setNavMap = useAppStore((s) => s.setNavMap);
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const project = useAppStore.getState().getProjectById(projectId);
+    if (!project) {
+      router.push('/');
+      return;
+    }
+    setActiveProject(projectId);
+    setEditName(project.name);
+  }, [projectId, setActiveProject, router]);
+
+  useEffect(() => {
+    if (isEditingName && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  const handleStartEdit = useCallback(() => {
+    if (activeProject) {
+      setEditName(activeProject.name);
+      setIsEditingName(true);
+    }
+  }, [activeProject]);
+
+  const handleSaveName = useCallback(() => {
+    const trimmedName = editName.trim();
+    if (trimmedName && trimmedName !== activeProject?.name) {
+      updateProjectName(projectId, trimmedName);
+    }
+    setIsEditingName(false);
+  }, [editName, projectId, activeProject, updateProjectName]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditName(activeProject?.name || '');
+    setIsEditingName(false);
+  }, [activeProject]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveName();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  }, [handleSaveName, handleCancelEdit]);
 
   const pages = activeProject?.pages ?? [];
   const storedNodes = activeProject?.flowNodes ?? [];
@@ -47,8 +103,6 @@ export default function FlowCanvas() {
   const nodeTypes = useMemo(() => ({ pageNode: PageNode }), []);
   const edgeTypes = useMemo(() => ({ deletable: DeletableEdge }), []);
 
-  const hasInitialised = useRef(false);
-
   const [nodes, setNodes] = useState<Node[]>(() => {
     return computeNodes(pages, storedNodes);
   });
@@ -57,35 +111,7 @@ export default function FlowCanvas() {
     return storedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' }));
   });
 
-  const [pendingEdgeUpdate, setPendingEdgeUpdate] = useState<Edge[] | null>(null);
-
   const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (pages.length === 0) return;
-    if (!hasInitialised.current) {
-      hasInitialised.current = true;
-      return;
-    }
-    setNodes((prev) =>
-      pages.map((page) => {
-        const existing = prev.find((n) => n.id === page.id);
-        return {
-          id: page.id,
-          type: 'pageNode' as const,
-          position: existing?.position ?? computeNodes([page], [])[0].position,
-          data: { page },
-          dragHandle: '.node-drag-handle',
-        };
-      })
-    );
-  }, [pages]);
-
-  useEffect(() => {
-    if (pendingEdgeUpdate === null) return;
-    setEdges(pendingEdgeUpdate.map((e) => ({ ...e, type: e.type ?? 'deletable' })));
-    setPendingEdgeUpdate(null);
-  }, [pendingEdgeUpdate]);
 
   const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((prev) => applyNodeChanges(changes, prev));
@@ -134,16 +160,76 @@ export default function FlowCanvas() {
   }, [nodes, edges, pages, setFlowNodes, setFlowEdges, setNavMap]);
 
   const handleDownloadJson = useCallback(() => {
-    const flowNodes = activeProject?.flowNodes ?? [];
-    const flowEdges = activeProject?.flowEdges ?? [];
-    const startPageId = startingPageId;
-    const output = flowToOutputJson(flowNodes, flowEdges, startPageId);
-    downloadOutputJson(output);
-  }, [activeProject, startingPageId]);
+    if (activeProject) {
+      const output = flowToOutputJson(storedNodes, storedEdges, startingPageId);
+      downloadOutputJson(output, activeProject.name);
+    }
+  }, [activeProject, storedNodes, storedEdges, startingPageId]);
+
+  if (!activeProject) {
+    return null;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <AppHeader />
+      <AppHeader>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link
+            href="/"
+            style={{
+              color: '#94a3b8',
+              textDecoration: 'none',
+              fontSize: 14,
+            }}
+          >
+            ← Back
+          </Link>
+          <span style={{ color: '#334155' }}>|</span>
+          {isEditingName ? (
+            <input
+              ref={inputRef}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleSaveName}
+              onKeyDown={handleKeyDown}
+              style={{
+                background: 'transparent',
+                border: '1px solid #35d7bb',
+                borderRadius: 4,
+                padding: '4px 8px',
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#f8fafc',
+                outline: 'none',
+                width: 200,
+              }}
+            />
+          ) : (
+            <div
+              onClick={handleStartEdit}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: 4,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>
+                {activeProject.name}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </AppHeader>
 
       {pages.length === 0 ? (
         <div
@@ -162,7 +248,7 @@ export default function FlowCanvas() {
           }}
         >
           <p style={{ margin: 0, maxWidth: '420px', lineHeight: 1.6 }}>
-            No screens loaded. Import a manifest JSON to get started.
+            No screens in this project. Import a manifest to get started.
           </p>
           <Link
             href="/import"
@@ -229,7 +315,7 @@ export default function FlowCanvas() {
                 Save Logic
               </button>
               <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6, textAlign: 'right' }}>
-                Click an edge to select it, then press Delete — or hover the edge to reveal the × button
+                Click an edge to select it, then press Delete
               </span>
             </div>
           </div>
@@ -293,15 +379,11 @@ export default function FlowCanvas() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#8b5cf6', border: '2px solid #fff', display: 'inline-block' }} />
-                  <span>Conditional navigate — JSON expression</span>
+                  <span>Conditional navigate</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#f59e0b', border: '2px solid #fff', display: 'inline-block' }} />
-                  <span>API call — 3 connections max</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#6b7280', border: '2px solid #9ca3af', display: 'inline-block', opacity: 0.5 }} />
-                  <span>Saturated — limit reached</span>
+                  <span>API call</span>
                 </div>
               </div>
             </Panel>

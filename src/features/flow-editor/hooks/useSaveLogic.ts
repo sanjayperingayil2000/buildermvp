@@ -4,16 +4,20 @@ import { buildNavMap } from '../utils/buildNavMap';
 import type { Node, Edge } from '@xyflow/react';
 
 export function useSaveLogic() {
-  const pages = useAppStore((s) => s.pages);
+  const setFlowNodes = useAppStore((s) => s.setFlowNodes);
+  const setFlowEdges = useAppStore((s) => s.setFlowEdges);
+  const setNavMap = useAppStore((s) => s.setNavMap);
+  const activeProject = useAppStore((s) => s.getActiveProject());
+  const pages = activeProject?.pages ?? [];
 
   const saveLogic = useCallback(
     (nodes: Node[], edges: Edge[]) => {
-      useAppStore.getState().setFlowNodes(nodes);
-      useAppStore.getState().setFlowEdges(edges);
-      useAppStore.getState().setNavMap(buildNavMap(edges as unknown as { source: string; sourceHandle: string | null | undefined; target: string; data?: unknown }[], pages));
+      setFlowNodes(nodes);
+      setFlowEdges(edges);
+      setNavMap(buildNavMap(edges as unknown as { source: string; sourceHandle: string | null | undefined; target: string; data?: unknown }[], pages));
       window.alert('Logic saved!');
     },
-    [pages]
+    [pages, setFlowNodes, setFlowEdges, setNavMap]
   );
 
   return { saveLogic };

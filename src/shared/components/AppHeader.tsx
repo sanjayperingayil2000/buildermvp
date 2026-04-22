@@ -1,6 +1,10 @@
 import Link from 'next/link';
 
-export default function AppHeader() {
+interface AppHeaderProps {
+  children?: React.ReactNode;
+}
+
+export default function AppHeader({ children }: AppHeaderProps) {
   return (
     <header
       style={{
@@ -16,18 +20,38 @@ export default function AppHeader() {
         zIndex: 20,
       }}
     >
-      <span
-        style={{
-          color: '#35d7bb',
-          fontWeight: 700,
-          fontSize: '16px',
-          letterSpacing: '0.5px',
-        }}
-      >
-        Kiosk Flow Editor
-      </span>
+      {children ? (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {children}
+        </div>
+      ) : (
+        <span
+          style={{
+            color: '#35d7bb',
+            fontWeight: 700,
+            fontSize: '16px',
+            letterSpacing: '0.5px',
+          }}
+        >
+          Kiosk Flow Editor
+        </span>
+      )}
 
       <nav style={{ display: 'flex', gap: '20px' }}>
+        <Link
+          href="/"
+          style={{
+            color: '#dae5e6',
+            textDecoration: 'none',
+            fontSize: '14px',
+            fontWeight: 500,
+            padding: '6px 12px',
+            borderRadius: '4px',
+            transition: 'background 0.15s',
+          }}
+        >
+          Projects
+        </Link>
         <Link
           href="/import"
           style={{
@@ -40,21 +64,7 @@ export default function AppHeader() {
             transition: 'background 0.15s',
           }}
         >
-          Import Manifest
-        </Link>
-        <Link
-          href="/flow-editor"
-          style={{
-            color: '#dae5e6',
-            textDecoration: 'none',
-            fontSize: '14px',
-            fontWeight: 500,
-            padding: '6px 12px',
-            borderRadius: '4px',
-            transition: 'background 0.15s',
-          }}
-        >
-          Flow Editor
+          Import
         </Link>
       </nav>
     </header>

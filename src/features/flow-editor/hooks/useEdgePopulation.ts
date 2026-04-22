@@ -3,13 +3,9 @@ import { useAppStore } from '@/shared/store';
 import type { Edge } from '@xyflow/react';
 
 export function useEdgePopulation() {
-  const pendingEdgeUpdate = useAppStore((s) => s.pendingEdgeUpdate);
-  const setPendingEdgeUpdate = useAppStore((s) => s.setPendingEdgeUpdate);
-
-  const applyPendingUpdate = (setEdges: (edges: Edge[]) => void) => {
-    if (pendingEdgeUpdate === null) return;
-    setEdges(pendingEdgeUpdate.map((e) => ({ ...e, type: e.type ?? 'deletable' })));
-    setPendingEdgeUpdate(null);
+  // This hook is no longer needed - edge updates are handled locally in FlowCanvas
+  const applyPendingUpdate = (_setEdges: (edges: Edge[]) => void) => {
+    // no-op
   };
 
   return { applyPendingUpdate };

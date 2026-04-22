@@ -1,10 +1,9 @@
 'use client';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { PageDescriptor, ActionElement, NavMapEntry } from '../types/store';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Node, Edge } from '@xyflow/react';
+import type { PageDescriptor, ActionElement, NavMapEntry } from '../types/store';
 
-/** Raw manifest widget shape preserved from upload (with full props) */
 export interface RawManifestWidget {
   uuid: string;
   id: string;
@@ -32,154 +31,407 @@ export interface BuildConfig {
   }> & { font_family: string };
 }
 
-interface AppState {
+export interface ProjectConfig {
+  initialRoute: string | null;
+  baseUrl: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
   pages: PageDescriptor[];
   flowNodes: Node[];
   flowEdges: Edge[];
   navMap: NavMapEntry[];
-  pendingEdgeUpdate: Edge[] | null;
-  isLoading: boolean;
-  toastMessage: string | null;
-  toastType: 'success' | 'error' | 'info';
-
-  /** Raw manifest pages with full widget + props data (for Next.js export) */
-  rawManifestPages: RawManifestPage[] | null;
-  /** Build config JSON with theme colours and typography (for Next.js export) */
+  rawManifestPages: RawManifestPage[];
   buildConfig: BuildConfig | null;
-
-  /** The page ID currently marked as the starting page (null if none) */
   startingPageId: string | null;
+  config: ProjectConfig;
+}
+
+interface AppState {
+  projects: Project[];
+  activeProjectId: string | null;
+
+  getActiveProject: () => Project | null;
+  getProjectById: (id: string) => Project | null;
+
+  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  deleteProject: (id: string) => void;
+  setActiveProject: (id: string) => void;
+  updateProjectName: (id: string, name: string) => void;
+  updateProjectConfig: (id: string, config: Partial<ProjectConfig>) => void;
 
   setPages: (pages: PageDescriptor[]) => void;
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
-  setNavMap: (map: NavMapEntry[]) => void;
-  setPendingEdgeUpdate: (edges: Edge[] | null) => void;
-  setLoading: (isLoading: boolean) => void;
-  setToast: (message: string | null, type?: 'success' | 'error' | 'info') => void;
+  setNavMap: (navMap: NavMapEntry[]) => void;
   setRawManifestPages: (pages: RawManifestPage[]) => void;
   setBuildConfig: (config: BuildConfig) => void;
-  setStartingPageId: (pageId: string | null) => void;
+  updateNode: (nodeId: string, data: unknown) => void;
+  setStartingPage: (pageId: string | null) => void;
 
   hideActionElement: (pageId: string, elementId: string) => void;
   restoreActionElement: (pageId: string, elementId: string) => void;
   updateActionElement: (pageId: string, elementId: string, updates: Partial<ActionElement>) => void;
+
+  hydrateFromStorage: () => void;
+  clearAll: () => void;
 }
+
+function touchProject(state: AppState, projectId: string): void {
+  const project = state.projects.find(p => p.id === projectId);
+  if (project) {
+    project.updatedAt = new Date().toISOString();
+  }
+}
+
+function generateId(): string {
+  return `proj_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
+  initialRoute: null,
+  baseUrl: 'https://api.example.com',
+};
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
-      pages: [],
-      flowNodes: [],
-      flowEdges: [],
-      navMap: [],
-      pendingEdgeUpdate: null,
-      isLoading: false,
-      toastMessage: null,
-      toastType: 'info',
-      rawManifestPages: null,
-      buildConfig: null,
-      startingPageId: null,
+    (set, get) => ({
+      projects: [],
+      activeProjectId: null,
 
-      setPages: (newPages) => set((state) => {
-        const validPageIds = new Set(newPages.map((p) => p.id));
-        const nextNodes = state.flowNodes.filter((node) => validPageIds.has(node.id));
-        const nextEdges = state.flowEdges.filter(
-          (edge) => validPageIds.has(edge.source) && validPageIds.has(edge.target)
-        );
-        const nextNavMap = state.navMap.filter(
-          (entry) => validPageIds.has(entry.sourcePageId) && validPageIds.has(entry.targetPageId)
-        );
-        // Clear startingPageId if the selected page was deleted
-        const nextStartingPageId =
-          state.startingPageId && !validPageIds.has(state.startingPageId)
-            ? null
-            : state.startingPageId;
-        return {
-          pages: newPages,
-          flowNodes: nextNodes,
-          flowEdges: nextEdges,
-          navMap: nextNavMap,
-          startingPageId: nextStartingPageId,
+      getActiveProject: () => {
+        const state = get();
+        if (!state.activeProjectId) return null;
+        return state.projects.find(p => p.id === state.activeProjectId) ?? null;
+      },
+
+      getProjectById: (id: string) => {
+        return get().projects.find(p => p.id === id) ?? null;
+      },
+
+      addProject: (projectData) => {
+        const id = generateId();
+        const now = new Date().toISOString();
+        const newProject: Project = {
+          ...projectData,
+          id,
+          name: projectData.name || 'Unnamed Project',
+          createdAt: now,
+          updatedAt: now,
+          pages: projectData.pages || [],
+          flowNodes: projectData.flowNodes || [],
+          flowEdges: projectData.flowEdges || [],
+          navMap: projectData.navMap || [],
+          rawManifestPages: projectData.rawManifestPages || [],
+          buildConfig: projectData.buildConfig || null,
+          startingPageId: projectData.startingPageId || null,
+          config: projectData.config || { ...DEFAULT_PROJECT_CONFIG },
         };
-      }),
 
-      setFlowNodes: (nodes) => set({ flowNodes: nodes }),
-      setFlowEdges: (edges) => set({ flowEdges: edges }),
-      setNavMap: (map) => set({ navMap: map }),
-      setPendingEdgeUpdate: (edges) => set({ pendingEdgeUpdate: edges }),
-      setLoading: (isLoading) => set({ isLoading }),
-      setToast: (message, type = 'info') => set({ toastMessage: message, toastType: type }),
-      setRawManifestPages: (pages) => set({ rawManifestPages: pages }),
-      setBuildConfig: (config) => set({ buildConfig: config }),
-      setStartingPageId: (pageId) => set({ startingPageId: pageId }),
+        set((state) => ({
+          projects: [...state.projects, newProject],
+          activeProjectId: id,
+        }));
 
-      hideActionElement: (pageId, elementId) => set((state) => {
-        const cleanedEdges = state.flowEdges.filter(
-          (e) => !(
-            e.source === pageId &&
-            (e.sourceHandle === elementId || e.sourceHandle?.startsWith(`${elementId}__`))
-          )
-        );
-        return {
-          pages: state.pages.map((p) =>
-            p.id === pageId
-              ? {
-                  ...p,
-                  actionElements: p.actionElements.map((el) =>
-                    el.id === elementId ? { ...el, isHidden: true } : el
+        return id;
+      },
+
+      deleteProject: (id) => {
+        set((state) => {
+          const filtered = state.projects.filter(p => p.id !== id);
+          return {
+            projects: filtered,
+            activeProjectId: state.activeProjectId === id 
+              ? (filtered.length > 0 ? filtered[0].id : null)
+              : state.activeProjectId,
+          };
+        });
+      },
+
+      setActiveProject: (id) => {
+        set({ activeProjectId: id });
+      },
+
+      updateProjectName: (id, name) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === id ? { ...p, name, updatedAt: new Date().toISOString() } : p
+          ),
+        }));
+      },
+
+      updateProjectConfig: (id, config) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === id 
+              ? { 
+                  ...p, 
+                  config: { ...p.config, ...config },
+                  startingPageId: 'initialRoute' in config && config.initialRoute !== undefined 
+                    ? config.initialRoute 
+                    : p.startingPageId,
+                  updatedAt: new Date().toISOString(),
+                } 
+              : p
+          ),
+        }));
+      },
+
+      setPages: (pages) => {
+        set((state) => {
+          const project = state.projects.find(p => p.id === state.activeProjectId);
+          if (!project) return {};
+
+          const validPageIds = new Set(pages.map(p => p.id));
+          const nextNodes = project.flowNodes.filter(n => validPageIds.has(n.id));
+          const nextEdges = project.flowEdges.filter(e => validPageIds.has(e.source) && validPageIds.has(e.target));
+          const nextNavMap = project.navMap.filter(e => validPageIds.has(e.sourcePageId) && validPageIds.has(e.targetPageId));
+
+          const nextStartingPageId = project.startingPageId && !validPageIds.has(project.startingPageId) ? null : project.startingPageId;
+
+          return {
+            projects: state.projects.map(p => 
+              p.id === state.activeProjectId
+                ? { 
+                    ...p, 
+                    pages, 
+                    flowNodes: nextNodes, 
+                    flowEdges: nextEdges, 
+                    navMap: nextNavMap, 
+                    startingPageId: nextStartingPageId,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : p
+            ),
+          };
+        });
+      },
+
+      setFlowNodes: (nodes) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { ...p, flowNodes: nodes, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        }));
+      },
+
+      setFlowEdges: (edges) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { ...p, flowEdges: edges, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        }));
+      },
+
+      setNavMap: (navMap) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { ...p, navMap, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        }));
+      },
+
+      setRawManifestPages: (pages) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { ...p, rawManifestPages: pages, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        }));
+      },
+
+      setBuildConfig: (config) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { ...p, buildConfig: config, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        }));
+      },
+
+      updateNode: (nodeId, data) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { 
+                  ...p, 
+                  flowNodes: p.flowNodes.map(n => 
+                    n.id === nodeId 
+                      ? { ...n, data: { ...(n.data as Record<string, unknown>), ...(data as Record<string, unknown>) }}
+                      : n
                   ),
+                  updatedAt: new Date().toISOString(),
                 }
               : p
           ),
-          flowEdges: cleanedEdges,
-          pendingEdgeUpdate: cleanedEdges,
-          navMap: state.navMap.filter(
-            (entry) => !(
-              entry.sourcePageId === pageId &&
-              (entry.sourceHandleId === elementId || entry.sourceHandleId?.startsWith(`${elementId}__`))
-            )
+        }));
+      },
+
+      setStartingPage: (pageId) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { 
+                  ...p, 
+                  startingPageId: pageId,
+                  config: { ...p.config, initialRoute: pageId },
+                  flowNodes: p.flowNodes.map(n => ({
+                    ...n,
+                    data: { ...n.data, startingPage: n.id === pageId },
+                  })),
+                  updatedAt: new Date().toISOString(),
+                }
+              : p
           ),
-        };
-      }),
+        }));
+      },
 
-      restoreActionElement: (pageId, elementId) => set((state) => ({
-        pages: state.pages.map((p) =>
-          p.id === pageId
-            ? {
-                ...p,
-                actionElements: p.actionElements.map((el) =>
-                  el.id === elementId ? { ...el, isHidden: false } : el
-                ),
-              }
-            : p
-        ),
-      })),
+      hideActionElement: (pageId, elementId) => {
+        set((state) => {
+          const project = state.projects.find(p => p.id === state.activeProjectId);
+          if (!project) return {};
 
-      updateActionElement: (pageId, elementId, updates) => set((state) => ({
-        pages: state.pages.map((p) =>
-          p.id === pageId
-            ? {
-                ...p,
-                actionElements: p.actionElements.map((el) =>
-                  el.id === elementId ? { ...el, ...updates } : el
-                ),
-              }
-            : p
-        ),
-      })),
+          const cleanedEdges: Edge[] = project.flowEdges.filter(e => 
+            !(e.source === pageId && (e.sourceHandle === elementId || e.sourceHandle?.startsWith(elementId + '__')))
+          );
+
+          return {
+            projects: state.projects.map(p => 
+              p.id === state.activeProjectId
+                ? { 
+                    ...p,
+                    pages: p.pages.map(page =>
+                      page.id === pageId
+                        ? { 
+                            ...page, 
+                            actionElements: page.actionElements.map(el =>
+                              el.id === elementId ? { ...el, isHidden: true } : el
+                            ),
+                          }
+                        : page
+                    ),
+                    flowEdges: cleanedEdges,
+                    navMap: p.navMap.filter(
+                      entry => !(entry.sourcePageId === pageId && (entry.sourceHandleId === elementId || entry.sourceHandleId?.startsWith(`${elementId}__`)))
+                    ),
+                    updatedAt: new Date().toISOString(),
+                  }
+                : p
+            ),
+          };
+        });
+      },
+
+      restoreActionElement: (pageId, elementId) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { 
+                  ...p,
+                  pages: p.pages.map(page =>
+                    page.id === pageId
+                      ? { 
+                          ...page, 
+                          actionElements: page.actionElements.map(el =>
+                            el.id === elementId ? { ...el, isHidden: false } : el
+                          ),
+                        }
+                      : page
+                  ),
+                  updatedAt: new Date().toISOString(),
+                }
+              : p
+          ),
+        }));
+      },
+
+      updateActionElement: (pageId, elementId, updates) => {
+        set((state) => ({
+          projects: state.projects.map(p => 
+            p.id === state.activeProjectId
+              ? { 
+                  ...p,
+                  pages: p.pages.map(page =>
+                    page.id === pageId
+                      ? { 
+                          ...page, 
+                          actionElements: page.actionElements.map(el =>
+                            el.id === elementId ? { ...el, ...updates } : el
+                          ),
+                        }
+                      : page
+                  ),
+                  updatedAt: new Date().toISOString(),
+                }
+              : p
+          ),
+        }));
+      },
+
+      hydrateFromStorage: () => {},
+
+      clearAll: () => {
+        set({ projects: [], activeProjectId: null });
+      },
     }),
     {
       name: 'kiosk-builder-store',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        pages: state.pages,
-        flowNodes: state.flowNodes,
-        flowEdges: state.flowEdges,
-        navMap: state.navMap,
-        rawManifestPages: state.rawManifestPages,
-        buildConfig: state.buildConfig,
-        startingPageId: state.startingPageId,
+        projects: state.projects,
+        activeProjectId: state.activeProjectId,
       }),
+      migrate: (persistedState: unknown, version: number) => {
+        if (version === 0) {
+          const oldState = persistedState as {
+            pages?: PageDescriptor[];
+            flowNodes?: Node[];
+            flowEdges?: Edge[];
+            navMap?: NavMapEntry[];
+            rawManifestPages?: RawManifestPage[] | null;
+            buildConfig?: BuildConfig | null;
+            startingPageId?: string | null;
+          };
+
+          const now = new Date().toISOString();
+          const existingProject: Project = {
+            id: generateId(),
+            name: 'Imported Project',
+            createdAt: now,
+            updatedAt: now,
+            pages: oldState.pages || [],
+            flowNodes: oldState.flowNodes || [],
+            flowEdges: oldState.flowEdges || [],
+            navMap: oldState.navMap || [],
+            rawManifestPages: oldState.rawManifestPages || [],
+            buildConfig: oldState.buildConfig || null,
+            startingPageId: oldState.startingPageId || null,
+            config: {
+              initialRoute: oldState.startingPageId || null,
+              baseUrl: 'https://api.example.com',
+            },
+          };
+
+          return {
+            projects: [existingProject],
+            activeProjectId: existingProject.id,
+          };
+        }
+        return persistedState as AppState;
+      },
     }
   )
 );
