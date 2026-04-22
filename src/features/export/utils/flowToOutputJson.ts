@@ -1,6 +1,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { PageDescriptor, ActionElement } from '@/shared/types/store';
 import { serializeConditionToExpression } from '@/features/flow-editor/utils/serializeExpression';
+import { API_ENDPOINT_CATALOG } from '@/config/apiEndpoints';
 
 /* ------------------------------------------------------------------ */
 /*  Target-schema type definitions                                     */
@@ -114,30 +115,28 @@ function buildPageNavigation(
 
     // --- API call with outcomes ---
     if (actionType === 'api-call') {
-      const validOutcomes = (el.outcomes ?? []).filter(
-        (o) => o.outcomeKey && o.targetPageId,
-      );
-      const transitions: NavigationTransition[] = validOutcomes.map((o) => ({
-        when: outcomeKeyToWhen(o.outcomeKey),
-        to: o.targetPageId,
-      }));
+      // Resolve endpoint details from catalog using the stored endpoint id
+      const catalogEntry = API_ENDPOINT_CATALOG.find(e => e.id === el.apiEndpoint);
+      const resolvedUrl = catalogEntry?.url ?? el.apiEndpoint ?? '/api/unknown';
+      const resolvedMethod = catalogEntry?.defaultMethod ?? el.method ?? 'POST';
 
-      // Resolve a fallback target: explicit fallbackPageId, or the first
-      // connected edge target, or the source page itself.
-      const fallbackTarget =
-        el.fallbackPageId ??
-        validOutcomes[validOutcomes.length - 1]?.targetPageId ??
-        page.id;
-      transitions.push({ to: fallbackTarget });
+      // Build transitions from jsonConditions (replacing the old outcomes system)
+      const validConditions = (el.jsonConditions ?? []).filter(
+        c => c.clauses && c.clauses.length > 0 && c.targetPageId
+      );
 
       navigation.push({
         trigger: el.id,
         type: 'apiCall',
         http: {
-          endpoint: el.apiEndpoint ?? '/api/unknown',
-          method: el.method ?? 'POST',
+          endpoint: resolvedUrl,
+          method: resolvedMethod,
         },
-        transitions: sortTransitions(transitions),
+        conditions: validConditions.map(c => ({
+          expression: serializeConditionToExpression(c),
+          outcomeKey: c.outcomeKey,
+          targetPageId: c.targetPageId,
+        })),
       });
       continue;
     }

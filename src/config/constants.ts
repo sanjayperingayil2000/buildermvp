@@ -13,7 +13,7 @@ export const HANDLE_COLORS = {
 
 export const MAX_CONNECTIONS = {
   navigate: 1,
-  apiCall: 3,
+  apiCall: 10,
   secureEntry: 1,
 } as const;
 

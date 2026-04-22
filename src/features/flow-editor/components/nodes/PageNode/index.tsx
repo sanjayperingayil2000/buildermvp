@@ -16,7 +16,7 @@ export default function PageNode({ data, selected }: NodeProps) {
   const startingPageId = useAppStore((s) => s.startingPageId);
   const setStartingPageId = useAppStore((s) => s.setStartingPageId);
   const isStartingPage = startingPageId === page.id;
-  const activeElements = page.actionElements.filter((el: ActionElement) => !el.isHidden);
+  const activeElements = page.actionElements.filter((el: ActionElement) => !el.isHidden && el.elementType !== 'input');
   const hiddenElements = page.actionElements.filter((el: ActionElement) => el.isHidden);
 
   return (

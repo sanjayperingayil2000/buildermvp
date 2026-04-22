@@ -1,12 +1,12 @@
 'use client';
 import React from 'react';
 import type { ExpressionClause, JsonCondition } from '@/shared/types/store';
-import type { ExpressionField } from '@/features/flow-editor/utils/buildExpressionContext';
+import type { ResponseField } from '@/features/flow-editor/utils/parseEndpointSchema';
 
 interface ExpressionBuilderProps {
   condition: JsonCondition;
   conditionIndex: number;
-  availableFields: ExpressionField[];
+  availableFields: ResponseField[];
   pages: { id: string; name: string }[];
   onChange: (updated: JsonCondition) => void;
   onRemove: () => void;
@@ -167,10 +167,10 @@ export default function ExpressionBuilder({
                 onChange={e => updateClause(clauseIdx, { leftField: e.target.value })}
                 style={{ ...inputStyle, width: '100%' }}
               >
-                <option value="">— select field —</option>
+                <option value="">— select endpoint first —</option>
                 {availableFields.map(f => (
                   <option key={f.path} value={f.path}>
-                    {f.pageName} — {f.elementLabel}
+                    {f.label} ({f.valueType}) · e.g. {f.sampleValue}
                   </option>
                 ))}
               </select>
@@ -229,10 +229,10 @@ export default function ExpressionBuilder({
                     onChange={e => updateClause(clauseIdx, { rightField: e.target.value })}
                     style={{ ...inputStyle, width: '100%' }}
                   >
-                    <option value="">— select field —</option>
+                    <option value="">— select endpoint first —</option>
                     {availableFields.map(f => (
                       <option key={f.path} value={f.path}>
-                        {f.pageName} — {f.elementLabel}
+                        {f.label} ({f.valueType}) · e.g. {f.sampleValue}
                       </option>
                     ))}
                   </select>

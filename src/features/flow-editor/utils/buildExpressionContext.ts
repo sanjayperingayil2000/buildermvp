@@ -1,3 +1,9 @@
+/**
+ * @deprecated No longer used for api-call conditional routes.
+ * api-call now uses parseEndpointSchema.ts to source fields from
+ * the selected API endpoint's response schema.
+ * Kept in case navigate conditional routes are re-introduced.
+ */
 import type { PageDescriptor } from '@/shared/types/store';
 
 export interface ExpressionField {
