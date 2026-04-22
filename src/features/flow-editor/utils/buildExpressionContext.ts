@@ -17,7 +17,7 @@ export function buildExpressionContext(pages: PageDescriptor[]): ExpressionField
   const fields: ExpressionField[] = [];
   for (const page of pages) {
     for (const el of page.actionElements) {
-      if (el.elementType === 'input') {
+      if ((el.elementType as string) === 'input') {
         fields.push({
           path: `${page.id}.${el.id}`,
           pageId: page.id,
