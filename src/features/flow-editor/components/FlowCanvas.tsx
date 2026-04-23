@@ -54,8 +54,17 @@ export default function FlowCanvas() {
   });
 
   const [edges, setEdges] = useState<Edge[]>(() => {
+    console.log("CANVAS - edges from store (initial):", storedEdges);
     return storedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' }));
   });
+
+  // Sync edges from store when they change (e.g., from ActionRow popup)
+  const savedEdges = activeProject?.flowEdges ?? [];
+  useEffect(() => {
+    const edgesWithType = savedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' }));
+    console.log("CANVAS - edges from store (useEffect):", savedEdges);
+    setEdges(edgesWithType);
+  }, [savedEdges]);
 
   const [pendingEdgeUpdate, setPendingEdgeUpdate] = useState<Edge[] | null>(null);
 

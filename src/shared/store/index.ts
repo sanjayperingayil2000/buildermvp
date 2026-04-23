@@ -222,6 +222,8 @@ export const useAppStore = create<AppState>()(
       },
 
       setFlowEdges: (edges) => {
+        console.log("setFlowEdges ACTION - activeProjectId:", get().activeProjectId);
+        console.log("setFlowEdges ACTION - writing edges:", edges.length);
         set((state) => ({
           projects: state.projects.map(p => 
             p.id === state.activeProjectId

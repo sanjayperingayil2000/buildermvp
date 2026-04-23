@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { useAppStore } from '@/shared/store';
 import type { ActionElement } from '@/shared/types/store';
@@ -164,6 +164,10 @@ function ActionConfigPopup({
     element.jsonConditions ?? []
   );
 
+  useEffect(() => {
+    setJsonConditions(element.jsonConditions ?? []);
+  }, [element.jsonConditions]);
+
   const addJsonCondition = () => {
     const defaultClause: ExpressionClause = {
       leftField: endpointFields[0]?.path ?? '',
@@ -248,6 +252,9 @@ function ActionConfigPopup({
       } as any));
       setFlowEdges([...edgesWithoutThisHandle, ...newEdges]);
     } else if (actionType === 'api-call') {
+      console.log("SAVE TRIGGERED - actionType:", actionType);
+      console.log("SAVE TRIGGERED - validJsonConditions:", validJsonConditions);
+      console.log("SAVE TRIGGERED - currentFlowEdges:", currentFlowEdges.length);
       const edgesWithoutThis = currentFlowEdges.filter(
         (e: any) => !(e.source === pageId && e.sourceHandle === element.id)
       );
@@ -264,6 +271,7 @@ function ActionConfigPopup({
         label: cond.outcomeKey,
         data: { actionType: 'api-call', outcomeKey: cond.outcomeKey, endpointId: selectedEndpointId },
       } as any));
+      console.log("CALLING setFlowEdges with:", [...edgesWithoutThis, ...conditionEdges].length, "edges");
       setFlowEdges([...edgesWithoutThis, ...conditionEdges]);
     } else if (actionType === 'navigate' && validJsonConditions.length > 0) {
       const edgesWithoutThisHandle = currentFlowEdges.filter(

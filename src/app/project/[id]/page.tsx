@@ -100,6 +100,33 @@ export default function ProjectCanvasPage() {
   const storedEdges = activeProject?.flowEdges ?? [];
   const startingPageId = activeProject?.startingPageId ?? null;
 
+  const hasInitialised = useRef(false);
+
+  useEffect(() => {
+    if (pages.length === 0) return;
+    if (!hasInitialised.current) {
+      hasInitialised.current = true;
+      return;
+    }
+    setNodes((prev) =>
+      pages.map((page) => {
+        const existing = prev.find((n) => n.id === page.id);
+        return {
+          id: page.id,
+          type: 'pageNode' as const,
+          position: existing?.position ?? computeNodes([page], [])[0].position,
+          data: { page },
+          dragHandle: '.node-drag-handle',
+        };
+      })
+    );
+  }, [pages]);
+
+  useEffect(() => {
+    if (!hasInitialised.current) return;
+    setEdges(storedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' })));
+  }, [storedEdges]);
+
   const nodeTypes = useMemo(() => ({ pageNode: PageNode }), []);
   const edgeTypes = useMemo(() => ({ deletable: DeletableEdge }), []);
 
