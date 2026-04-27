@@ -357,7 +357,7 @@ export const useAppStore = create<AppState>()(
           if (!project) return {};
 
           const cleanedEdges: Edge[] = project.flowEdges.filter(e => 
-            !(e.source === pageId && (e.sourceHandle === elementId || e.sourceHandle?.startsWith(elementId + '__')))
+            !(e.source === pageId && e.sourceHandle === elementId)
           );
 
           return {

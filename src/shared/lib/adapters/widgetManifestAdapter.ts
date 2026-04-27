@@ -25,10 +25,11 @@ interface RawWidgetManifest {
   pages?: RawWidgetPage[];
 }
 
-function resolveElementType(type: string): 'input' | 'button' | 'link' | null {
+function resolveElementType(type: string): 'input' | 'button' | 'link' | 'qr' | null {
   const t = type.toLowerCase();
   if (t.includes('input') || t.includes('textfield') || t.includes('field')) return 'input';
   if (t.includes('link')) return 'link';
+  if (t.includes('qr') || t.includes('qrcode') || t.includes('qr_code') || t.includes('scanner')) return 'qr';
   if (
     t.includes('button') ||
     t.includes('btn') ||

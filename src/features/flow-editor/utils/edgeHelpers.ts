@@ -44,9 +44,13 @@ export function isValidConnection(
   );
   const existingCount = existingEdgesFromHandle.length;
 
-  if (actionType === 'navigate' || actionType === 'none' || actionType === 'secure_entry_routing') {
+  if (actionType === 'navigate_back' || actionType === 'navigate_close') {
+    return { valid: false, message: `This button uses "${actionType === 'navigate_back' ? 'Navigate — Back' : 'Navigate — Close'}" which does not connect to a specific page.` };
+  }
+
+  if (actionType === 'navigate' || actionType === 'none') {
     if (existingCount >= 1) {
-      return { valid: false, message: 'This handle already has a connection. Each outcome can only conditionally route to one page.' };
+      return { valid: false, message: 'This handle already has a connection. Delete the existing edge to reconnect.' };
     }
     return { valid: true };
   }

@@ -25,3 +25,11 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
 }
+
+.action-config-popup-scroll::-webkit-scrollbar {
+  display: none;
+}
+.action-config-popup-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

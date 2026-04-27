@@ -25,7 +25,7 @@ export interface ActionElement {
   id: string;
   uuid?: string;
   label: string;
-  elementType?: 'button' | 'link' | 'input';
+  elementType?: 'button' | 'link' | 'input' | 'qr';
   actionType: string;
   navigateTo: string | null;
 
@@ -55,7 +55,7 @@ export interface NavMapOutcome {
 }
 
 export interface EdgeAction {
-  actionType: 'navigate' | 'api-call' | 'secure_entry_routing' | 'none';
+  actionType: 'navigate' | 'api-call' | 'navigate_back' | 'navigate_close' | 'none';
   apiEndpoint: string | null;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   outcomes: NavMapOutcome[];

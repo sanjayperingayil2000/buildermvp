@@ -142,8 +142,28 @@ function buildPageNavigation(
       continue;
     }
 
+    // --- Navigate Back ---
+    if (actionType === 'navigate_back') {
+      navigation.push({
+        trigger: el.id,
+        type: 'navigate',
+        to: 'back',
+      });
+      continue;
+    }
+
+    // --- Navigate Close ---
+    if (actionType === 'navigate_close') {
+      navigation.push({
+        trigger: el.id,
+        type: 'navigate',
+        to: 'minimize',
+      });
+      continue;
+    }
+
     // --- Simple navigate ---
-    if (actionType === 'navigate' || actionType === 'secure_entry_routing') {
+    if (actionType === 'navigate') {
       // Resolve target from the canvas edge
       const connectedEdge = edges.find(
         (e) => e.source === page.id && e.sourceHandle === el.id,
