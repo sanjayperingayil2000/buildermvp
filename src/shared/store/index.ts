@@ -218,18 +218,41 @@ export const useAppStore = create<AppState>()(
           const nextNodes = project.flowNodes.filter(n => validPageIds.has(n.id));
           const nextEdges = project.flowEdges.filter(e => validPageIds.has(e.source) && validPageIds.has(e.target));
           const nextNavMap = project.navMap.filter(e => validPageIds.has(e.sourcePageId) && validPageIds.has(e.targetPageId));
-
           const nextStartingPageId = project.startingPageId && !validPageIds.has(project.startingPageId) ? null : project.startingPageId;
 
+          // Scrub stale targetPageId references inside every surviving page's actionElements.
+          // This handles three places where a deleted page's id may be stored:
+          //   1. jsonConditions[].targetPageId  — used by api-call and conditionalNavigate
+          //   2. outcomes[].targetPageId        — used by secure_entry_routing
+          //   3. navigateTo                     — used by simple navigate
+          const scrubbedPages = pages.map((page) => ({
+            ...page,
+            actionElements: page.actionElements.map((el) => ({
+              ...el,
+              // Remove jsonConditions that point to the deleted page
+              jsonConditions: (el.jsonConditions ?? []).filter(
+                (c) => validPageIds.has(c.targetPageId)
+              ),
+              // Remove outcomes that point to the deleted page
+              outcomes: (el.outcomes ?? []).filter(
+                (o) => validPageIds.has(o.targetPageId)
+              ),
+              // Clear navigateTo if it pointed to the deleted page
+              navigateTo: el.navigateTo && validPageIds.has(el.navigateTo)
+                ? el.navigateTo
+                : null,
+            })),
+          }));
+
           return {
-            projects: state.projects.map(p => 
+            projects: state.projects.map(p =>
               p.id === state.activeProjectId
-                ? { 
-                    ...p, 
-                    pages, 
-                    flowNodes: nextNodes, 
-                    flowEdges: nextEdges, 
-                    navMap: nextNavMap, 
+                ? {
+                    ...p,
+                    pages: scrubbedPages,
+                    flowNodes: nextNodes,
+                    flowEdges: nextEdges,
+                    navMap: nextNavMap,
                     startingPageId: nextStartingPageId,
                     updatedAt: new Date().toISOString(),
                   }

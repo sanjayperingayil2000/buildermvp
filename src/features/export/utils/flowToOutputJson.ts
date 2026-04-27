@@ -86,6 +86,7 @@ function sortTransitions(ts: NavigationTransition[]): NavigationTransition[] {
 function buildPageNavigation(
   page: PageDescriptor,
   edges: Edge[],
+  validPageIds: Set<string>,
 ): NavigationEntry[] {
   const navigation: NavigationEntry[] = [];
 
@@ -97,7 +98,7 @@ function buildPageNavigation(
     // --- Conditional navigate (JSON expressions) ---
     if (actionType === 'navigate' && (el.jsonConditions ?? []).length > 0) {
       const validConditions = (el.jsonConditions ?? []).filter(
-        (c) => c.clauses && c.clauses.length > 0 && c.targetPageId,
+        (c) => c.clauses && c.clauses.length > 0 && c.targetPageId && validPageIds.has(c.targetPageId),
       );
       if (validConditions.length > 0) {
         navigation.push({
@@ -122,7 +123,7 @@ function buildPageNavigation(
 
       // Build transitions from jsonConditions (replacing the old outcomes system)
       const validConditions = (el.jsonConditions ?? []).filter(
-        c => c.clauses && c.clauses.length > 0 && c.targetPageId
+        c => c.clauses && c.clauses.length > 0 && c.targetPageId && validPageIds.has(c.targetPageId)
       );
 
       navigation.push({
@@ -184,6 +185,14 @@ export function flowToOutputJson(
   edges: Edge[],
   startingPageId: string | null = null,
 ): OutputJson {
+  // Build the set of all page IDs present in this export so we can
+  // defensively filter out any stale references in jsonConditions/outcomes.
+  const validPageIds = new Set(
+    nodes
+      .map((n) => (n.data as { page?: PageDescriptor }).page?.id)
+      .filter((id): id is string => Boolean(id))
+  );
+
   const pages: OutputPageEntry[] = [];
 
   for (const node of nodes) {
@@ -192,7 +201,7 @@ export function flowToOutputJson(
 
     pages.push({
       id: page.id,
-      navigation: buildPageNavigation(page, edges),
+      navigation: buildPageNavigation(page, edges, validPageIds),
     });
   }
 
