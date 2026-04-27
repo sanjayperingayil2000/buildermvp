@@ -27,6 +27,8 @@ import AppHeader from '@/shared/components/AppHeader';
 import PageNode from '@/features/flow-editor/components/nodes/PageNode';
 import { DeletableEdge } from '@/features/flow-editor/components/nodes/DeletableEdge';
 import { useAppStore } from '@/shared/store';
+import type { PageDescriptor } from '@/shared/types/store';
+import AddPageModal from '@/features/flow-editor/components/AddPageModal';
 import { computeNodes } from '@/features/flow-editor/utils/computeNodes';
 import { createConnectionEdge, isValidConnection } from '@/features/flow-editor/utils/edgeHelpers';
 import { buildNavMap } from '@/features/flow-editor/utils/buildNavMap';
@@ -45,9 +47,11 @@ export default function ProjectCanvasPage() {
   const setFlowNodes = useAppStore((s) => s.setFlowNodes);
   const setFlowEdges = useAppStore((s) => s.setFlowEdges);
   const setNavMap = useAppStore((s) => s.setNavMap);
+  const addPagesToProject = useAppStore((s) => s.addPagesToProject);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
+  const [showAddPageModal, setShowAddPageModal] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -193,6 +197,11 @@ export default function ProjectCanvasPage() {
     }
   }, [activeProject, storedNodes, storedEdges, startingPageId]);
 
+  const handleAddPages = useCallback((newPages: PageDescriptor[], newNodes: Node[]) => {
+    addPagesToProject(newPages, newNodes);
+    setShowAddPageModal(false);
+  }, [addPagesToProject]);
+
   if (!activeProject) {
     return null;
   }
@@ -296,6 +305,32 @@ export default function ProjectCanvasPage() {
         </div>
       ) : (
         <div style={{ flex: 1, position: 'relative' }}>
+          {/* Top-left: Add Page button */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 12,
+              left: 12,
+              zIndex: 5,
+            }}
+          >
+            <button
+              onClick={() => setShowAddPageModal(true)}
+              style={{
+                padding: '8px 20px',
+                backgroundColor: '#1e293b',
+                color: '#35d7bb',
+                border: '1px solid #35d7bb',
+                borderRadius: '6px',
+                fontWeight: 600,
+                fontSize: '14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              }}
+            >
+              + Add Page
+            </button>
+          </div>
           <div
             style={{
               position: 'absolute',
@@ -416,6 +451,14 @@ export default function ProjectCanvasPage() {
             </Panel>
           </ReactFlow>
         </div>
+      )}
+
+      {showAddPageModal && (
+        <AddPageModal
+          onConfirm={handleAddPages}
+          onClose={() => setShowAddPageModal(false)}
+          existingPageCount={pages.length}
+        />
       )}
     </div>
   );

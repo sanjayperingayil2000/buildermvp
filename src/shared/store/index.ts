@@ -65,6 +65,7 @@ interface AppState {
   updateProjectConfig: (id: string, config: Partial<ProjectConfig>) => void;
 
   setPages: (pages: PageDescriptor[]) => void;
+  addPagesToProject: (newPages: PageDescriptor[], newNodes: Node[]) => void;
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
   setNavMap: (navMap: NavMapEntry[]) => void;
@@ -179,6 +180,33 @@ export const useAppStore = create<AppState>()(
               : p
           ),
         }));
+      },
+
+      addPagesToProject: (newPages, newNodes) => {
+        set((state) => {
+          const project = state.projects.find(p => p.id === state.activeProjectId);
+          if (!project) return {};
+
+          // Deduplicate: skip pages whose id already exists
+          const existingPageIds = new Set(project.pages.map(p => p.id));
+          const uniqueNewPages = newPages.filter(p => !existingPageIds.has(p.id));
+          const uniqueNewNodes = newNodes.filter(n => !existingPageIds.has(n.id));
+
+          if (uniqueNewPages.length === 0) return {};
+
+          return {
+            projects: state.projects.map(p =>
+              p.id === state.activeProjectId
+                ? {
+                    ...p,
+                    pages: [...p.pages, ...uniqueNewPages],
+                    flowNodes: [...p.flowNodes, ...uniqueNewNodes],
+                    updatedAt: new Date().toISOString(),
+                  }
+                : p
+            ),
+          };
+        });
       },
 
       setPages: (pages) => {

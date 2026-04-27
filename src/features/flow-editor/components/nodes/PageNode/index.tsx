@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useAppStore } from '@/shared/store';
 import type { PageDescriptor, ActionElement } from '@/shared/types/store';
@@ -14,6 +14,14 @@ export default function PageNode({ data, selected }: NodeProps) {
   const { page } = data as PageNodeData;
   const activeProject = useAppStore((s) => s.getActiveProject());
   const setStartingPage = useAppStore((s) => s.setStartingPage);
+  const setPages = useAppStore((s) => s.setPages);
+  const pages = useAppStore((s) => s.getActiveProject()?.pages ?? []);
+
+  const handleRemovePage = useCallback(() => {
+    const confirmed = window.confirm(`Remove page "${page.name}" from the canvas? All connections to and from this page will also be removed.`);
+    if (!confirmed) return;
+    setPages(pages.filter(p => p.id !== page.id));
+  }, [page, pages, setPages]);
   const flowEdges = activeProject?.flowEdges ?? [];
   const startingPageId = activeProject?.startingPageId ?? null;
   const isStartingPage = startingPageId === page.id;
@@ -68,22 +76,47 @@ export default function PageNode({ data, selected }: NodeProps) {
           userSelect: 'none',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: 8,
         }}
       >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: isStartingPage ? '#f59e0b' : '#64748b',
-            display: 'inline-block',
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: isStartingPage ? '#f59e0b' : '#64748b',
+              display: 'inline-block',
+            }}
+          />
+          {page.name}
+          {isStartingPage && (
+            <span style={{ fontSize: 14, lineHeight: 1 }} title="Starting Page">⭐</span>
+          )}
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // prevent drag or node selection
+            handleRemovePage();
           }}
-        />
-        {page.name}
-        {isStartingPage && (
-          <span style={{ marginLeft: 'auto', fontSize: 14, lineHeight: 1 }} title="Starting Page">⭐</span>
-        )}
+          title="Remove this page from canvas"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontSize: 16,
+            lineHeight: 1,
+            padding: '2px 6px',
+            borderRadius: 4,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#64748b'; }}
+        >
+          ×
+        </button>
       </div>
       {/* Starting Page checkbox */}
       <label

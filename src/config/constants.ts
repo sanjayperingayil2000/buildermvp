@@ -1,7 +1,7 @@
-export const ITEMS_PER_ROW = 3;
+export const ITEMS_PER_ROW = 4;
 export const NODE_WIDTH = 280;
-export const H_GAP = 80;
-export const V_GAP = 100;
+export const H_GAP = 60;
+export const V_GAP = 80;
 
 export const HANDLE_COLORS = {
   navigate: '#10b981',
