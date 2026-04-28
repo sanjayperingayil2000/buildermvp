@@ -25,7 +25,7 @@ export interface ActionElement {
   id: string;
   uuid?: string;
   label: string;
-  elementType?: 'button' | 'link' | 'input' | 'qr';
+  elementType?: 'button' | 'link' | 'input' | 'qr' | 'action';
   actionType: string;
   navigateTo: string | null;
 

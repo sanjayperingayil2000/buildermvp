@@ -36,7 +36,8 @@ export default function ActionRow({ element, currentEdgeCount, pageId }: ActionR
 
   const displayLabel = element.label && element.label !== element.id ? element.label :
     element.elementType === 'link' ? 'Link' :
-    element.elementType === 'qr' ? 'QR Scanner' : 'Button';
+    element.elementType === 'qr' ? 'QR Scanner' :
+    element.elementType === 'action' ? 'Action' : 'Button';
 
   return (
     <div style={{ position: 'relative', borderTop: '1px solid #f1f5f9' }}>

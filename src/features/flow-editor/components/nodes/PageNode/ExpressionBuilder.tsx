@@ -170,7 +170,7 @@ export default function ExpressionBuilder({
                 <option value="">— select endpoint first —</option>
                 {availableFields.map(f => (
                   <option key={f.path} value={f.path}>
-                    {f.label} ({f.valueType}) · e.g. {f.sampleValue}
+                    {f.label} ({f.valueType === 'integer' ? 'number' : f.valueType}) · e.g. {f.sampleValue}
                   </option>
                 ))}
               </select>
@@ -232,7 +232,7 @@ export default function ExpressionBuilder({
                     <option value="">— select endpoint first —</option>
                     {availableFields.map(f => (
                       <option key={f.path} value={f.path}>
-                        {f.label} ({f.valueType}) · e.g. {f.sampleValue}
+                        {f.label} ({f.valueType === 'integer' ? 'number' : f.valueType}) · e.g. {f.sampleValue}
                       </option>
                     ))}
                   </select>

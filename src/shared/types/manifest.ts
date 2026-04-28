@@ -1,7 +1,7 @@
 export interface ManifestElement {
   id: string;
   uuid?: string;
-  type: 'button' | 'link' | 'input' | 'qr';
+  type: 'button' | 'link' | 'input' | 'qr' | 'action';
   name: string;
 }
 

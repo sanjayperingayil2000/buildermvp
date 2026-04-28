@@ -24,8 +24,9 @@ export function parseManifestToFlow(manifest: Manifest): {
       const elementType: ActionElement['elementType'] =
         element.type === 'input' ? 'input'
           : element.type === 'link' ? 'link'
-          : element.type === 'qr' ? 'qr'
-          : 'button';
+            : element.type === 'qr' ? 'qr'
+              : element.type === 'action' ? 'action'
+                : 'button';
 
       return {
         id: element.id,

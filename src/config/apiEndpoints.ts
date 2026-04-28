@@ -1,58 +1,60 @@
 /**
- * API Endpoint Catalog
- * 
- * Each entry defines a known API endpoint available in the kiosk app.
- * The `responseSchema` is a representative sample of the JSON response
- * that this endpoint returns. The field parser will walk this object
- * and extract all leaf paths (e.g. "status", "user.account.balance")
- * to populate the conditional route field selectors.
- * 
  * TO ADD MORE ENDPOINTS LATER:
  * Just add a new entry to this array following the same shape.
  * The parser in `parseEndpointSchema.ts` will automatically handle
  * nested objects and arrays (using the first array element as sample).
  */
 
+/*
+ * Minimal OpenAPI 3.0 Schema Object.
+ */
+export type OpenApiSchemaType = 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array';
+
+export interface OpenApiSchemaObject {
+  type: OpenApiSchemaType;
+  properties?: Record<string, OpenApiSchemaObject>;
+  items?: OpenApiSchemaObject;
+  enum?: (string | number | boolean)[];
+  example?: string | number | boolean | null;
+  nullable?: boolean;
+  description?: string;
+  required?: string[];
+}
+
 export interface ApiEndpointDefinition {
-  /** Unique key used as the value stored in ActionElement.apiEndpoint */
   id: string;
-  /** Human-readable label shown in the dropdown */
   label: string;
-  /** HTTP method this endpoint expects */
   defaultMethod: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  /** URL path */
   url: string;
-  /**
-   * A representative JSON response object from this endpoint.
-   * All leaf fields in this object will be extracted as available
-   * fields for conditional route expressions.
-   */
-  responseSchema: Record<string, unknown>;
+  responseSchema: OpenApiSchemaObject;
 }
 
 export const API_ENDPOINT_CATALOG: ApiEndpointDefinition[] = [
   {
     id: 'mock_payment_verify',
     label: 'Payment Verification',
-    defaultMethod: 'POST',
-    url: '/api/mock/payment/verify',
+    defaultMethod: 'GET',
+    url: '/api/mock-payment',
     responseSchema: {
-      status: 'success',           // string: "success" | "failure" | "pending"
-      code: 200,                   // number: HTTP-level result code
-      transaction: {
-        id: 'txn_abc123',
-        amount: 150.00,
-        currency: 'USD',
-        approved: true,
-      },
-      customer: {
-        id: 'cust_001',
-        tier: 'gold',              // string: "standard" | "silver" | "gold"
-        balance: 500.00,
-      },
-      error: {
-        code: '',                  // string: e.g. "INSUFFICIENT_FUNDS"
-        message: '',
+      type: 'object',
+      required: ['outcome', 'message', 'timestamp'],
+      properties: {
+        outcome: {
+          type: 'string',
+          enum: ['success', 'insufficient_funds', 'error'],
+          example: 'success',
+          description: 'The result of the payment attempt',
+        },
+        message: {
+          type: 'string',
+          example: 'Payment processed successfully.',
+          description: 'Human-readable result message',
+        },
+        timestamp: {
+          type: 'string',
+          example: '2026-04-28T10:00:00.000Z',
+          description: 'ISO 8601 timestamp of when the response was generated',
+        },
       },
     },
   },
