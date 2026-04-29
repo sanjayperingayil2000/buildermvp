@@ -2,34 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Node, Edge } from '@xyflow/react';
-import type { PageDescriptor, ActionElement, NavMapEntry } from '../types/store';
-
-export interface RawManifestWidget {
-  uuid: string;
-  id: string;
-  type: string;
-  props: Record<string, unknown>;
-  state_variants?: Record<string, Record<string, unknown>>;
-}
-
-export interface RawManifestPage {
-  id: string;
-  uuid?: string;
-  name: string;
-  route?: string;
-  widgets: RawManifestWidget[];
-}
-
-export interface BuildConfig {
-  theme_light: Record<string, string>;
-  theme_dark: Record<string, string>;
-  typography: Record<string, {
-    size: number;
-    weight: number;
-    line_height: number;
-    letter_spacing: number;
-  }> & { font_family: string };
-}
+import type { PageDescriptor, ActionElement } from '../types/store';
 
 export interface ProjectConfig {
   initialRoute: string | null;
@@ -44,9 +17,6 @@ export interface Project {
   pages: PageDescriptor[];
   flowNodes: Node[];
   flowEdges: Edge[];
-  navMap: NavMapEntry[];
-  rawManifestPages: RawManifestPage[];
-  buildConfig: BuildConfig | null;
   startingPageId: string | null;
   config: ProjectConfig;
 }
@@ -62,23 +32,17 @@ interface AppState {
   deleteProject: (id: string) => void;
   setActiveProject: (id: string) => void;
   updateProjectName: (id: string, name: string) => void;
-  updateProjectConfig: (id: string, config: Partial<ProjectConfig>) => void;
 
   setPages: (pages: PageDescriptor[]) => void;
   addPagesToProject: (newPages: PageDescriptor[], newNodes: Node[]) => void;
   setFlowNodes: (nodes: Node[]) => void;
   setFlowEdges: (edges: Edge[]) => void;
-  setNavMap: (navMap: NavMapEntry[]) => void;
-  setRawManifestPages: (pages: RawManifestPage[]) => void;
-  setBuildConfig: (config: BuildConfig) => void;
-  updateNode: (nodeId: string, data: unknown) => void;
   setStartingPage: (pageId: string | null) => void;
 
   hideActionElement: (pageId: string, elementId: string) => void;
   restoreActionElement: (pageId: string, elementId: string) => void;
   updateActionElement: (pageId: string, elementId: string, updates: Partial<ActionElement>) => void;
 
-  hydrateFromStorage: () => void;
   clearAll: () => void;
 }
 
@@ -119,9 +83,6 @@ export const useAppStore = create<AppState>()(
           pages: projectData.pages || [],
           flowNodes: projectData.flowNodes || [],
           flowEdges: projectData.flowEdges || [],
-          navMap: projectData.navMap || [],
-          rawManifestPages: projectData.rawManifestPages || [],
-          buildConfig: projectData.buildConfig || null,
           startingPageId: projectData.startingPageId || null,
           config: projectData.config || { ...DEFAULT_PROJECT_CONFIG },
         };
@@ -154,23 +115,6 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           projects: state.projects.map(p =>
             p.id === id ? { ...p, name, updatedAt: new Date().toISOString() } : p
-          ),
-        }));
-      },
-
-      updateProjectConfig: (id, config) => {
-        set((state) => ({
-          projects: state.projects.map(p =>
-            p.id === id
-              ? {
-                ...p,
-                config: { ...p.config, ...config },
-                startingPageId: 'initialRoute' in config && config.initialRoute !== undefined
-                  ? config.initialRoute
-                  : p.startingPageId,
-                updatedAt: new Date().toISOString(),
-              }
-              : p
           ),
         }));
       },
@@ -210,7 +154,6 @@ export const useAppStore = create<AppState>()(
           const validPageIds = new Set(pages.map(p => p.id));
           const nextNodes = project.flowNodes.filter(n => validPageIds.has(n.id));
           const nextEdges = project.flowEdges.filter(e => validPageIds.has(e.source) && validPageIds.has(e.target));
-          const nextNavMap = project.navMap.filter(e => validPageIds.has(e.sourcePageId) && validPageIds.has(e.targetPageId));
           const nextStartingPageId = project.startingPageId && !validPageIds.has(project.startingPageId) ? null : project.startingPageId;
 
           // Scrub stale targetPageId references inside every surviving page's actionElements.
@@ -224,10 +167,6 @@ export const useAppStore = create<AppState>()(
               // Remove jsonConditions that point to the deleted page
               jsonConditions: (el.jsonConditions ?? []).filter(
                 (c) => validPageIds.has(c.targetPageId)
-              ),
-              // Remove outcomes that point to the deleted page
-              outcomes: (el.outcomes ?? []).filter(
-                (o) => validPageIds.has(o.targetPageId)
               ),
               // Clear navigateTo if it pointed to the deleted page
               navigateTo: el.navigateTo && validPageIds.has(el.navigateTo)
@@ -244,7 +183,6 @@ export const useAppStore = create<AppState>()(
                   pages: scrubbedPages,
                   flowNodes: nextNodes,
                   flowEdges: nextEdges,
-                  navMap: nextNavMap,
                   startingPageId: nextStartingPageId,
                   updatedAt: new Date().toISOString(),
                 }
@@ -269,54 +207,6 @@ export const useAppStore = create<AppState>()(
           projects: state.projects.map(p =>
             p.id === state.activeProjectId
               ? { ...p, flowEdges: edges, updatedAt: new Date().toISOString() }
-              : p
-          ),
-        }));
-      },
-
-      setNavMap: (navMap) => {
-        set((state) => ({
-          projects: state.projects.map(p =>
-            p.id === state.activeProjectId
-              ? { ...p, navMap, updatedAt: new Date().toISOString() }
-              : p
-          ),
-        }));
-      },
-
-      setRawManifestPages: (pages) => {
-        set((state) => ({
-          projects: state.projects.map(p =>
-            p.id === state.activeProjectId
-              ? { ...p, rawManifestPages: pages, updatedAt: new Date().toISOString() }
-              : p
-          ),
-        }));
-      },
-
-      setBuildConfig: (config) => {
-        set((state) => ({
-          projects: state.projects.map(p =>
-            p.id === state.activeProjectId
-              ? { ...p, buildConfig: config, updatedAt: new Date().toISOString() }
-              : p
-          ),
-        }));
-      },
-
-      updateNode: (nodeId, data) => {
-        set((state) => ({
-          projects: state.projects.map(p =>
-            p.id === state.activeProjectId
-              ? {
-                ...p,
-                flowNodes: p.flowNodes.map(n =>
-                  n.id === nodeId
-                    ? { ...n, data: { ...(n.data as Record<string, unknown>), ...(data as Record<string, unknown>) } }
-                    : n
-                ),
-                updatedAt: new Date().toISOString(),
-              }
               : p
           ),
         }));
@@ -366,9 +256,6 @@ export const useAppStore = create<AppState>()(
                       : page
                   ),
                   flowEdges: cleanedEdges,
-                  navMap: p.navMap.filter(
-                    entry => !(entry.sourcePageId === pageId && (entry.sourceHandleId === elementId || entry.sourceHandleId?.startsWith(`${elementId}__`)))
-                  ),
                   updatedAt: new Date().toISOString(),
                 }
                 : p
@@ -423,8 +310,6 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
-      hydrateFromStorage: () => { },
-
       clearAll: () => {
         set({ projects: [], activeProjectId: null });
       },
@@ -443,9 +328,6 @@ export const useAppStore = create<AppState>()(
             pages?: PageDescriptor[];
             flowNodes?: Node[];
             flowEdges?: Edge[];
-            navMap?: NavMapEntry[];
-            rawManifestPages?: RawManifestPage[] | null;
-            buildConfig?: BuildConfig | null;
             startingPageId?: string | null;
           };
 
@@ -458,9 +340,6 @@ export const useAppStore = create<AppState>()(
             pages: oldState.pages || [],
             flowNodes: oldState.flowNodes || [],
             flowEdges: oldState.flowEdges || [],
-            navMap: oldState.navMap || [],
-            rawManifestPages: oldState.rawManifestPages || [],
-            buildConfig: oldState.buildConfig || null,
             startingPageId: oldState.startingPageId || null,
             config: {
               initialRoute: oldState.startingPageId || null,

@@ -7,22 +7,11 @@ import { API_ENDPOINT_CATALOG } from '@/config/apiEndpoints';
 /*  Target-schema type definitions                                     */
 /* ------------------------------------------------------------------ */
 
-interface TransitionWhen {
-  statusCode?: number | number[];
-  body?: { path: string; equals: string };
-}
-
-interface NavigationTransition {
-  when?: TransitionWhen;
-  to: string;
-}
-
 interface NavigationEntry {
   trigger: string;
   type: 'navigate' | 'apiCall' | 'conditionalNavigate';
   to?: string;
   http?: { endpoint: string; method: string };
-  transitions?: NavigationTransition[];
   conditions?: Array<{
     expression: string;
     outcomeKey: string;
@@ -49,35 +38,6 @@ export interface OutputJson {
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_BASE_URL = 'https://api.example.com';
-
-/** Map an outcomeKey to the correct `when` condition. */
-function outcomeKeyToWhen(key: string): TransitionWhen {
-  const k = key.toLowerCase();
-  if (k === 'success') {
-    return { statusCode: 200 };
-  }
-  if (k === 'failure' || k === 'error') {
-    return { statusCode: [400, 422, 500] };
-  }
-  if (k === 'pending') {
-    return { statusCode: 200, body: { path: 'status', equals: 'pending' } };
-  }
-  // Unknown outcome key — use body-path discrimination so it stays specific
-  return { statusCode: 200, body: { path: 'result', equals: key } };
-}
-
-/** Sort transitions: most-specific first, fallback (no `when`) last. */
-function sortTransitions(ts: NavigationTransition[]): NavigationTransition[] {
-  return [...ts].sort((a, b) => {
-    if (!a.when && !b.when) return 0;
-    if (!a.when) return 1;   // a is fallback → goes last
-    if (!b.when) return -1;  // b is fallback → goes last
-    // Body-qualified conditions are more specific
-    const aSpec = a.when.body ? 2 : 1;
-    const bSpec = b.when.body ? 2 : 1;
-    return bSpec - aSpec;
-  });
-}
 
 /* ------------------------------------------------------------------ */
 /*  Build navigation entries for a single page                        */

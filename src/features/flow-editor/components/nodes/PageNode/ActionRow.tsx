@@ -4,6 +4,7 @@ import { Handle, Position } from '@xyflow/react';
 import { useAppStore } from '@/shared/store';
 import type { ActionElement } from '@/shared/types/store';
 import { API_ENDPOINT_CATALOG } from '@/config/apiEndpoints';
+import { MAX_CONNECTIONS } from '@/config/constants';
 import { parseEndpointSchema, type ResponseField } from '@/features/flow-editor/utils/parseEndpointSchema';
 import ExpressionBuilder from './ExpressionBuilder';
 import type { JsonCondition, ExpressionClause } from '@/shared/types/store';
@@ -26,8 +27,8 @@ export default function ActionRow({ element, currentEdgeCount, pageId }: ActionR
     element.actionType === 'navigate_close' ? '#64748b' : '#94a3b8';
 
   const maxConnections =
-    element.actionType === 'api-call' ? 10 :
-    element.actionType === 'navigate' ? 1 : 1;
+    element.actionType === 'api-call' ? MAX_CONNECTIONS.apiCall :
+    element.actionType === 'navigate' ? MAX_CONNECTIONS.navigate : 1;
 
   const isSaturated = currentEdgeCount >= maxConnections;
   const handleColor = isSaturated ? '#6b7280' :
@@ -146,7 +147,6 @@ function ActionConfigPopup({
 
   const [label, setLabel] = useState(element.label);
   const [actionType, setActionType] = useState<string>(element.actionType);
-  const [apiEndpoint, setApiEndpoint] = useState<string>(element.apiEndpoint ?? '');
   const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'DELETE'>(element.method ?? 'POST');
 
   
@@ -213,8 +213,6 @@ function ActionConfigPopup({
   };
 
   const handleSave = () => {
-
-    const isAdvanced = actionType === 'api-call';
     
     // Validate: condition needs outcomeKey, targetPageId, and at least one complete clause
     const validJsonConditions = jsonConditions.filter(c =>

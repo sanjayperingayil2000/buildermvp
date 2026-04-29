@@ -1,8 +1,8 @@
 import type { Edge, Connection } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import type { EdgeAction } from '@/shared/types/store';
+import { MAX_CONNECTIONS } from '@/config/constants';
 
-export function createConnectionEdge(connection: Connection, edgeData?: EdgeAction): Edge {
+export function createConnectionEdge(connection: Connection): Edge {
   return {
     id: `edge-${connection.source}-${connection.sourceHandle}-${connection.target}-${Date.now()}`,
     type: 'deletable',
@@ -13,11 +13,11 @@ export function createConnectionEdge(connection: Connection, edgeData?: EdgeActi
     animated: true,
     style: { stroke: '#3b82f6', strokeWidth: 2 },
     markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-    data: (edgeData ?? {
+    data: {
       actionType: 'navigate',
       apiEndpoint: null,
       method: 'POST',
-    }) as Record<string, unknown>,
+    } as Record<string, unknown>,
   };
 }
 
@@ -48,15 +48,15 @@ export function isValidConnection(
   }
 
   if (actionType === 'navigate' || actionType === 'none') {
-    if (existingCount >= 1) {
+    if (existingCount >= MAX_CONNECTIONS.navigate) {
       return { valid: false, message: 'This handle already has a connection. Delete the existing edge to reconnect.' };
     }
     return { valid: true };
   }
 
   if (actionType === 'api-call') {
-    if (existingCount >= 3) {
-      return { valid: false, message: 'This button already has 3 connections. API call buttons support a maximum of 3 outcome routes.' };
+    if (existingCount >= MAX_CONNECTIONS.apiCall) {
+      return { valid: false, message: `This button already has ${MAX_CONNECTIONS.apiCall} connections. API call buttons support a maximum of ${MAX_CONNECTIONS.apiCall} outcome routes.` };
     }
     return { valid: true };
   }

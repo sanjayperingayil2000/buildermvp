@@ -60,7 +60,7 @@ export function normalizeWidgetManifest(rawJson: unknown): Manifest {
     const elements = widgets
       .filter((w) => {
         const t = (w.type ?? '').toLowerCase();
-        return ![...SKIP_TYPES].some((skip) => t.includes(skip));
+        return !SKIP_TYPES.has(t);
       })
       .flatMap((w) => {
         const type = w.type ?? '';

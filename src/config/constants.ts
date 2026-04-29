@@ -12,7 +12,7 @@ export const HANDLE_COLORS = {
 
 export const MAX_CONNECTIONS = {
   navigate: 1,
-  apiCall: 10,
+  apiCall: 3,
 } as const;
 
 export const GRID_CONSTANTS = {

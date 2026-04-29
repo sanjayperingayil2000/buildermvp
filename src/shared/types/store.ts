@@ -26,7 +26,7 @@ export interface ActionElement {
   uuid?: string;
   label: string;
   elementType?: 'button' | 'link' | 'input' | 'qr' | 'action';
-  actionType: string;
+  actionType: 'navigate' | 'api-call' | 'navigate_back' | 'navigate_close' | 'none';
   navigateTo: string | null;
 
   /**
@@ -37,32 +37,6 @@ export interface ActionElement {
 
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
 
-  /**
-   * Removed from api-call — conditional routes handle api-call routing now.
-   */
-  outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;
-
-  fallbackPageId?: string;
   isHidden?: boolean;
   jsonConditions?: JsonCondition[];
-}
-
-export interface NavMapOutcome {
-  outcomeKey: string;
-  targetPageId: string;
-}
-
-export interface EdgeAction {
-  actionType: 'navigate' | 'api-call' | 'navigate_back' | 'navigate_close' | 'none';
-  apiEndpoint: string | null;
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  outcomes: NavMapOutcome[];
-  fallbackPageId?: string;
-}
-
-export interface NavMapEntry {
-  sourcePageId: string;
-  sourceHandleId: string;
-  targetPageId: string;
-  action: EdgeAction;
 }

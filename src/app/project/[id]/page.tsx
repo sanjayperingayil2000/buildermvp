@@ -141,6 +141,7 @@ export default function ProjectCanvasPage() {
   });
 
   const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
 
   const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((prev) => applyNodeChanges(changes, prev));
@@ -184,15 +185,16 @@ export default function ProjectCanvasPage() {
   const handleSaveLogic = useCallback(() => {
     setFlowNodes(nodes);
     setFlowEdges(edges);
-    window.alert('Logic saved!');
-  }, [nodes, edges, pages, setFlowNodes, setFlowEdges]);
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  }, [nodes, edges, setFlowNodes, setFlowEdges]);
 
   const handleDownloadJson = useCallback(() => {
     if (activeProject) {
-      const output = flowToOutputJson(storedNodes, storedEdges, startingPageId);
+      const output = flowToOutputJson(nodes, edges, startingPageId);
       downloadOutputJson(output, activeProject.name);
     }
-  }, [activeProject, storedNodes, storedEdges, startingPageId]);
+  }, [activeProject, nodes, edges, startingPageId]);
 
   const handleAddPages = useCallback((newPages: PageDescriptor[], newNodes: Node[]) => {
     addPagesToProject(newPages, newNodes);
@@ -361,7 +363,7 @@ export default function ProjectCanvasPage() {
                 onClick={handleSaveLogic}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: '#35d7bb',
+                  backgroundColor: saveStatus === 'saved' ? '#10b981' : '#35d7bb',
                   color: '#1e1e2e',
                   border: 'none',
                   borderRadius: '6px',
@@ -369,12 +371,13 @@ export default function ProjectCanvasPage() {
                   fontSize: '14px',
                   cursor: 'pointer',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                  transition: 'background-color 0.2s ease',
                 }}
               >
-                Save Logic
+                {saveStatus === 'saved' ? '✓ Saved' : 'Save Logic'}
               </button>
-              <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6, textAlign: 'right' }}>
-                Click an edge to select it, then press Delete
+              <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#10b981' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
+                {saveStatus === 'saved' ? 'Logic saved successfully' : 'Click an edge to select it, then press Delete'}
               </span>
             </div>
           </div>
