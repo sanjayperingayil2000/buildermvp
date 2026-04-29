@@ -17,7 +17,6 @@ export function createConnectionEdge(connection: Connection, edgeData?: EdgeActi
       actionType: 'navigate',
       apiEndpoint: null,
       method: 'POST',
-      outcomes: [],
     }) as Record<string, unknown>,
   };
 }

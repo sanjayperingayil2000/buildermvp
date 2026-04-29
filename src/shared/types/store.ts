@@ -32,14 +32,12 @@ export interface ActionElement {
   /**
    * For api-call: stores the endpoint `id` from API_ENDPOINT_CATALOG
    * (e.g. "mock_payment_verify"). The actual URL is resolved at export time.
-   * For secure_entry_routing: stores the raw URL as before.
    */
   apiEndpoint: string | null;
 
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
 
   /**
-   * ONLY used by secure_entry_routing (phone_12 / card_16 outcomes).
    * Removed from api-call — conditional routes handle api-call routing now.
    */
   outcomes?: Array<{ outcomeKey: string; targetPageId: string }>;

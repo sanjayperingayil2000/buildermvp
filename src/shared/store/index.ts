@@ -82,13 +82,6 @@ interface AppState {
   clearAll: () => void;
 }
 
-function touchProject(state: AppState, projectId: string): void {
-  const project = state.projects.find(p => p.id === projectId);
-  if (project) {
-    project.updatedAt = new Date().toISOString();
-  }
-}
-
 function generateId(): string {
   return `proj_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -223,7 +216,6 @@ export const useAppStore = create<AppState>()(
           // Scrub stale targetPageId references inside every surviving page's actionElements.
           // This handles three places where a deleted page's id may be stored:
           //   1. jsonConditions[].targetPageId  — used by api-call and conditionalNavigate
-          //   2. outcomes[].targetPageId        — used by secure_entry_routing
           //   3. navigateTo                     — used by simple navigate
           const scrubbedPages = pages.map((page) => ({
             ...page,

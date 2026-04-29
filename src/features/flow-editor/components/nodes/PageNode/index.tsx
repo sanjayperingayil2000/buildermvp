@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useAppStore } from '@/shared/store';
 import type { PageDescriptor, ActionElement } from '@/shared/types/store';
@@ -15,7 +15,7 @@ export default function PageNode({ data, selected }: NodeProps) {
   const activeProject = useAppStore((s) => s.getActiveProject());
   const setStartingPage = useAppStore((s) => s.setStartingPage);
   const setPages = useAppStore((s) => s.setPages);
-  const pages = useAppStore((s) => s.getActiveProject()?.pages ?? []);
+const pages = activeProject?.pages ?? [];
 
   const handleRemovePage = useCallback(() => {
     const confirmed = window.confirm(`Remove page "${page.name}" from the canvas? All connections to and from this page will also be removed.`);

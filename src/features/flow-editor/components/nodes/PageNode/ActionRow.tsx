@@ -229,8 +229,6 @@ function ActionConfigPopup({
       actionType: actionType as ActionElement['actionType'],
       apiEndpoint: actionType === 'api-call' ? selectedEndpointId : null,
       method: actionType === 'api-call' ? method : 'POST',
-      outcomes: [],
-      fallbackPageId: undefined,
       navigateTo: null,
       jsonConditions: actionType === 'api-call' ? (validJsonConditions.length > 0 ? validJsonConditions : undefined) : undefined,
     };
