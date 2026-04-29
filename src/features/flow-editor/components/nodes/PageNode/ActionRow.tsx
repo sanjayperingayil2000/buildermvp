@@ -240,9 +240,6 @@ function ActionConfigPopup({
     const currentFlowEdges = activeProject?.flowEdges ?? [];
     
     if (actionType === 'api-call') {
-      console.log("SAVE TRIGGERED - actionType:", actionType);
-      console.log("SAVE TRIGGERED - validJsonConditions:", validJsonConditions);
-      console.log("SAVE TRIGGERED - currentFlowEdges:", currentFlowEdges.length);
       const edgesWithoutThis = currentFlowEdges.filter(
         (e: any) => !(e.source === pageId && e.sourceHandle === element.id)
       );
@@ -259,7 +256,6 @@ function ActionConfigPopup({
         label: cond.outcomeKey,
         data: { actionType: 'api-call', outcomeKey: cond.outcomeKey, endpointId: selectedEndpointId },
       } as any));
-      console.log("CALLING setFlowEdges with:", [...edgesWithoutThis, ...conditionEdges].length, "edges");
       setFlowEdges([...edgesWithoutThis, ...conditionEdges]);
     } else if (actionType === 'navigate' && validJsonConditions.length > 0) {
       const edgesWithoutThisHandle = currentFlowEdges.filter(

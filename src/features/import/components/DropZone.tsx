@@ -1,5 +1,3 @@
-import { useAppStore } from '@/shared/store';
-
 interface DropZoneProps {
   isDragging: boolean;
   onDragOver: (e: React.DragEvent) => void;

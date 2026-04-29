@@ -31,7 +31,6 @@ import type { PageDescriptor } from '@/shared/types/store';
 import AddPageModal from '@/features/flow-editor/components/AddPageModal';
 import { computeNodes } from '@/features/flow-editor/utils/computeNodes';
 import { createConnectionEdge, isValidConnection } from '@/features/flow-editor/utils/edgeHelpers';
-import { buildNavMap } from '@/features/flow-editor/utils/buildNavMap';
 import { flowToOutputJson } from '@/features/export/utils/flowToOutputJson';
 import { downloadOutputJson } from '@/features/export/utils/downloadOutputJson';
 import { GRID_CONSTANTS } from '@/config/constants';
@@ -46,7 +45,6 @@ export default function ProjectCanvasPage() {
   const updateProjectName = useAppStore((s) => s.updateProjectName);
   const setFlowNodes = useAppStore((s) => s.setFlowNodes);
   const setFlowEdges = useAppStore((s) => s.setFlowEdges);
-  const setNavMap = useAppStore((s) => s.setNavMap);
   const addPagesToProject = useAppStore((s) => s.addPagesToProject);
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -186,9 +184,8 @@ export default function ProjectCanvasPage() {
   const handleSaveLogic = useCallback(() => {
     setFlowNodes(nodes);
     setFlowEdges(edges);
-    setNavMap(buildNavMap(edges as unknown as { source: string; sourceHandle: string | null | undefined; target: string; data?: unknown }[], pages));
     window.alert('Logic saved!');
-  }, [nodes, edges, pages, setFlowNodes, setFlowEdges, setNavMap]);
+  }, [nodes, edges, pages, setFlowNodes, setFlowEdges]);
 
   const handleDownloadJson = useCallback(() => {
     if (activeProject) {

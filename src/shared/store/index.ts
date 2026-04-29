@@ -146,7 +146,7 @@ export const useAppStore = create<AppState>()(
           const filtered = state.projects.filter(p => p.id !== id);
           return {
             projects: filtered,
-            activeProjectId: state.activeProjectId === id 
+            activeProjectId: state.activeProjectId === id
               ? (filtered.length > 0 ? filtered[0].id : null)
               : state.activeProjectId,
           };
@@ -159,7 +159,7 @@ export const useAppStore = create<AppState>()(
 
       updateProjectName: (id, name) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === id ? { ...p, name, updatedAt: new Date().toISOString() } : p
           ),
         }));
@@ -167,16 +167,16 @@ export const useAppStore = create<AppState>()(
 
       updateProjectConfig: (id, config) => {
         set((state) => ({
-          projects: state.projects.map(p => 
-            p.id === id 
-              ? { 
-                  ...p, 
-                  config: { ...p.config, ...config },
-                  startingPageId: 'initialRoute' in config && config.initialRoute !== undefined 
-                    ? config.initialRoute 
-                    : p.startingPageId,
-                  updatedAt: new Date().toISOString(),
-                } 
+          projects: state.projects.map(p =>
+            p.id === id
+              ? {
+                ...p,
+                config: { ...p.config, ...config },
+                startingPageId: 'initialRoute' in config && config.initialRoute !== undefined
+                  ? config.initialRoute
+                  : p.startingPageId,
+                updatedAt: new Date().toISOString(),
+              }
               : p
           ),
         }));
@@ -198,11 +198,11 @@ export const useAppStore = create<AppState>()(
             projects: state.projects.map(p =>
               p.id === state.activeProjectId
                 ? {
-                    ...p,
-                    pages: [...p.pages, ...uniqueNewPages],
-                    flowNodes: [...p.flowNodes, ...uniqueNewNodes],
-                    updatedAt: new Date().toISOString(),
-                  }
+                  ...p,
+                  pages: [...p.pages, ...uniqueNewPages],
+                  flowNodes: [...p.flowNodes, ...uniqueNewNodes],
+                  updatedAt: new Date().toISOString(),
+                }
                 : p
             ),
           };
@@ -248,14 +248,14 @@ export const useAppStore = create<AppState>()(
             projects: state.projects.map(p =>
               p.id === state.activeProjectId
                 ? {
-                    ...p,
-                    pages: scrubbedPages,
-                    flowNodes: nextNodes,
-                    flowEdges: nextEdges,
-                    navMap: nextNavMap,
-                    startingPageId: nextStartingPageId,
-                    updatedAt: new Date().toISOString(),
-                  }
+                  ...p,
+                  pages: scrubbedPages,
+                  flowNodes: nextNodes,
+                  flowEdges: nextEdges,
+                  navMap: nextNavMap,
+                  startingPageId: nextStartingPageId,
+                  updatedAt: new Date().toISOString(),
+                }
                 : p
             ),
           };
@@ -264,7 +264,7 @@ export const useAppStore = create<AppState>()(
 
       setFlowNodes: (nodes) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
               ? { ...p, flowNodes: nodes, updatedAt: new Date().toISOString() }
               : p
@@ -273,10 +273,8 @@ export const useAppStore = create<AppState>()(
       },
 
       setFlowEdges: (edges) => {
-        console.log("setFlowEdges ACTION - activeProjectId:", get().activeProjectId);
-        console.log("setFlowEdges ACTION - writing edges:", edges.length);
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
               ? { ...p, flowEdges: edges, updatedAt: new Date().toISOString() }
               : p
@@ -286,7 +284,7 @@ export const useAppStore = create<AppState>()(
 
       setNavMap: (navMap) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
               ? { ...p, navMap, updatedAt: new Date().toISOString() }
               : p
@@ -296,7 +294,7 @@ export const useAppStore = create<AppState>()(
 
       setRawManifestPages: (pages) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
               ? { ...p, rawManifestPages: pages, updatedAt: new Date().toISOString() }
               : p
@@ -306,7 +304,7 @@ export const useAppStore = create<AppState>()(
 
       setBuildConfig: (config) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
               ? { ...p, buildConfig: config, updatedAt: new Date().toISOString() }
               : p
@@ -316,17 +314,17 @@ export const useAppStore = create<AppState>()(
 
       updateNode: (nodeId, data) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
-              ? { 
-                  ...p, 
-                  flowNodes: p.flowNodes.map(n => 
-                    n.id === nodeId 
-                      ? { ...n, data: { ...(n.data as Record<string, unknown>), ...(data as Record<string, unknown>) }}
-                      : n
-                  ),
-                  updatedAt: new Date().toISOString(),
-                }
+              ? {
+                ...p,
+                flowNodes: p.flowNodes.map(n =>
+                  n.id === nodeId
+                    ? { ...n, data: { ...(n.data as Record<string, unknown>), ...(data as Record<string, unknown>) } }
+                    : n
+                ),
+                updatedAt: new Date().toISOString(),
+              }
               : p
           ),
         }));
@@ -334,18 +332,18 @@ export const useAppStore = create<AppState>()(
 
       setStartingPage: (pageId) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
-              ? { 
-                  ...p, 
-                  startingPageId: pageId,
-                  config: { ...p.config, initialRoute: pageId },
-                  flowNodes: p.flowNodes.map(n => ({
-                    ...n,
-                    data: { ...n.data, startingPage: n.id === pageId },
-                  })),
-                  updatedAt: new Date().toISOString(),
-                }
+              ? {
+                ...p,
+                startingPageId: pageId,
+                config: { ...p.config, initialRoute: pageId },
+                flowNodes: p.flowNodes.map(n => ({
+                  ...n,
+                  data: { ...n.data, startingPage: n.id === pageId },
+                })),
+                updatedAt: new Date().toISOString(),
+              }
               : p
           ),
         }));
@@ -356,31 +354,31 @@ export const useAppStore = create<AppState>()(
           const project = state.projects.find(p => p.id === state.activeProjectId);
           if (!project) return {};
 
-          const cleanedEdges: Edge[] = project.flowEdges.filter(e => 
+          const cleanedEdges: Edge[] = project.flowEdges.filter(e =>
             !(e.source === pageId && e.sourceHandle === elementId)
           );
 
           return {
-            projects: state.projects.map(p => 
+            projects: state.projects.map(p =>
               p.id === state.activeProjectId
-                ? { 
-                    ...p,
-                    pages: p.pages.map(page =>
-                      page.id === pageId
-                        ? { 
-                            ...page, 
-                            actionElements: page.actionElements.map(el =>
-                              el.id === elementId ? { ...el, isHidden: true } : el
-                            ),
-                          }
-                        : page
-                    ),
-                    flowEdges: cleanedEdges,
-                    navMap: p.navMap.filter(
-                      entry => !(entry.sourcePageId === pageId && (entry.sourceHandleId === elementId || entry.sourceHandleId?.startsWith(`${elementId}__`)))
-                    ),
-                    updatedAt: new Date().toISOString(),
-                  }
+                ? {
+                  ...p,
+                  pages: p.pages.map(page =>
+                    page.id === pageId
+                      ? {
+                        ...page,
+                        actionElements: page.actionElements.map(el =>
+                          el.id === elementId ? { ...el, isHidden: true } : el
+                        ),
+                      }
+                      : page
+                  ),
+                  flowEdges: cleanedEdges,
+                  navMap: p.navMap.filter(
+                    entry => !(entry.sourcePageId === pageId && (entry.sourceHandleId === elementId || entry.sourceHandleId?.startsWith(`${elementId}__`)))
+                  ),
+                  updatedAt: new Date().toISOString(),
+                }
                 : p
             ),
           };
@@ -389,22 +387,22 @@ export const useAppStore = create<AppState>()(
 
       restoreActionElement: (pageId, elementId) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
-              ? { 
-                  ...p,
-                  pages: p.pages.map(page =>
-                    page.id === pageId
-                      ? { 
-                          ...page, 
-                          actionElements: page.actionElements.map(el =>
-                            el.id === elementId ? { ...el, isHidden: false } : el
-                          ),
-                        }
-                      : page
-                  ),
-                  updatedAt: new Date().toISOString(),
-                }
+              ? {
+                ...p,
+                pages: p.pages.map(page =>
+                  page.id === pageId
+                    ? {
+                      ...page,
+                      actionElements: page.actionElements.map(el =>
+                        el.id === elementId ? { ...el, isHidden: false } : el
+                      ),
+                    }
+                    : page
+                ),
+                updatedAt: new Date().toISOString(),
+              }
               : p
           ),
         }));
@@ -412,28 +410,28 @@ export const useAppStore = create<AppState>()(
 
       updateActionElement: (pageId, elementId, updates) => {
         set((state) => ({
-          projects: state.projects.map(p => 
+          projects: state.projects.map(p =>
             p.id === state.activeProjectId
-              ? { 
-                  ...p,
-                  pages: p.pages.map(page =>
-                    page.id === pageId
-                      ? { 
-                          ...page, 
-                          actionElements: page.actionElements.map(el =>
-                            el.id === elementId ? { ...el, ...updates } : el
-                          ),
-                        }
-                      : page
-                  ),
-                  updatedAt: new Date().toISOString(),
-                }
+              ? {
+                ...p,
+                pages: p.pages.map(page =>
+                  page.id === pageId
+                    ? {
+                      ...page,
+                      actionElements: page.actionElements.map(el =>
+                        el.id === elementId ? { ...el, ...updates } : el
+                      ),
+                    }
+                    : page
+                ),
+                updatedAt: new Date().toISOString(),
+              }
               : p
           ),
         }));
       },
 
-      hydrateFromStorage: () => {},
+      hydrateFromStorage: () => { },
 
       clearAll: () => {
         set({ projects: [], activeProjectId: null });
