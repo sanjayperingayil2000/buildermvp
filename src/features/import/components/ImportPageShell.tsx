@@ -7,6 +7,7 @@ import { useAppStore } from '@/shared/store';
 import { parseManifestToFlow } from '@/shared/lib/parseManifestToFlow';
 import { fetchServices, fetchDesignFiles, saveOutputFlow } from '@/lib/api';
 import type { Manifest } from '@/shared/types/manifest';
+import { normalizeWidgetManifest } from '@/shared/lib/adapters/widgetManifestAdapter';
 
 type LoadState = 'idle' | 'loading-services' | 'services-loaded' | 'loading-files' | 'files-loaded' | 'creating' | 'error';
 
@@ -42,9 +43,9 @@ export default function ImportPageShell() {
     setErrorMessage('');
     try {
       const res = await fetchDesignFiles(serviceName);
-      // Backend returns { serviceName, pageCount, pages: ManifestPage[], rawFiles }
-      // pages is already in the internal manifest format
-      const manifest: Manifest = { pages: res.pages as Manifest['pages'] };
+      // Pass the raw backend data through the normalizer to translate 
+      // raw widgets into actionable elements for the React Flow canvas.
+      const manifest = normalizeWidgetManifest({ pages: res.pages });
       setFetchedManifest(manifest);
       setPageCount(res.pageCount);
       setProjectName(serviceName.charAt(0).toUpperCase() + serviceName.slice(1));
