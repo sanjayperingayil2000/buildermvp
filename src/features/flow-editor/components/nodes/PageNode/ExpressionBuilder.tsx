@@ -55,6 +55,7 @@ export default function ExpressionBuilder({
       rightType: 'value',
       rightField: '',
       rightValue: '',
+      rightValueType: 'string',
     };
     onChange({ ...condition, clauses: [...condition.clauses, newClause] });
   };
@@ -213,13 +214,24 @@ export default function ExpressionBuilder({
               {clause.rightType === 'value' ? (
                 <>
                   <label style={labelStyle}>Value</label>
-                  <input
-                    type="text"
-                    value={clause.rightValue}
-                    onChange={e => updateClause(clauseIdx, { rightValue: e.target.value })}
-                    placeholder='e.g. 50, "active", true'
-                    style={{ ...inputStyle, width: '100%' }}
-                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select
+                      value={clause.rightValueType ?? 'string'}
+                      onChange={e => updateClause(clauseIdx, { rightValueType: e.target.value as ExpressionClause['rightValueType'] })}
+                      style={{ ...inputStyle, width: '90px', flexShrink: 0 }}
+                    >
+                      <option value="string">String</option>
+                      <option value="number">Number</option>
+                      <option value="boolean">Boolean</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={clause.rightValue}
+                      onChange={e => updateClause(clauseIdx, { rightValue: e.target.value })}
+                      placeholder='e.g. 50, "active", true'
+                      style={{ ...inputStyle, flexGrow: 1 }}
+                    />
+                  </div>
                 </>
               ) : (
                 <>

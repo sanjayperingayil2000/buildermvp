@@ -1,22 +1,37 @@
 import type { Node, Edge } from '@xyflow/react';
-import type { PageDescriptor, ActionElement } from '@/shared/types/store';
-import { serializeConditionToExpression } from '@/features/flow-editor/utils/serializeExpression';
+import type { JsonCondition, PageDescriptor } from '@/shared/types/store';
 import { API_ENDPOINT_CATALOG } from '@/config/apiEndpoints';
 
 /* ------------------------------------------------------------------ */
 /*  Target-schema type definitions                                     */
 /* ------------------------------------------------------------------ */
 
+interface MatchClause {
+  field: string;
+  op: '==' | '!=' | '>' | '<' | '>=' | '<=';
+  compareType: 'value' | 'field';
+  value?: string | number | boolean; // present when compareType === 'value'
+  fieldRef?: string;     // present when compareType === 'field'
+}
+
+interface MatchBlock {
+  clauseOperator: 'AND' | 'OR';
+  clauses: MatchClause[];
+}
+
+interface ConditionEntry {
+  outcomeKey: string;
+  targetPageId: string;
+  errorMessage: string;
+  match: MatchBlock;
+}
+
 interface NavigationEntry {
   trigger: string;
   type: 'navigate' | 'apiCall' | 'conditionalNavigate';
   to?: string;
   http?: { endpoint: string; method: string };
-  conditions?: Array<{
-    expression: string;
-    outcomeKey: string;
-    targetPageId: string;
-  }>;
+  conditions?: ConditionEntry[];
 }
 
 interface OutputPageEntry {
@@ -38,6 +53,35 @@ export interface OutputJson {
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_BASE_URL = 'https://api.example.com';
+
+function buildConditionEntry(c: JsonCondition): ConditionEntry {
+  return {
+    outcomeKey: c.outcomeKey,
+    targetPageId: c.targetPageId,
+    errorMessage: c.errorMessage ?? '',
+    match: {
+      clauseOperator: c.clauseOperator,
+      clauses: c.clauses.map((cl) => {
+        const base = {
+          field: cl.leftField,
+          op: cl.operator,
+          compareType: cl.rightType,
+        };
+        
+        let parsedValue: string | number | boolean = cl.rightValue;
+        if (cl.rightValueType === 'number') {
+          parsedValue = Number(cl.rightValue);
+        } else if (cl.rightValueType === 'boolean') {
+          parsedValue = cl.rightValue === 'true';
+        }
+        
+        return cl.rightType === 'field'
+          ? { ...base, fieldRef: cl.rightField }
+          : { ...base, value: parsedValue };
+      }),
+    },
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /*  Build navigation entries for a single page                        */
@@ -64,11 +108,7 @@ function buildPageNavigation(
         navigation.push({
           trigger: el.id,
           type: 'conditionalNavigate',
-          conditions: validConditions.map((c) => ({
-            expression: serializeConditionToExpression(c),
-            outcomeKey: c.outcomeKey,
-            targetPageId: c.targetPageId,
-          })),
+          conditions: validConditions.map(buildConditionEntry),
         });
         continue;
       }
@@ -93,11 +133,7 @@ function buildPageNavigation(
           endpoint: resolvedUrl,
           method: resolvedMethod,
         },
-        conditions: validConditions.map(c => ({
-          expression: serializeConditionToExpression(c),
-          outcomeKey: c.outcomeKey,
-          targetPageId: c.targetPageId,
-        })),
+        conditions: validConditions.map(buildConditionEntry),
       });
       continue;
     }

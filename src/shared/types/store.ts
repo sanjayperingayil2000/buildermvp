@@ -11,6 +11,7 @@ export interface ExpressionClause {
   rightType: 'field' | 'value';
   rightField: string;          // used when rightType = 'field'
   rightValue: string;          // used when rightType = 'value'
+  rightValueType?: 'string' | 'number' | 'boolean';
 }
 
 export interface JsonCondition {
