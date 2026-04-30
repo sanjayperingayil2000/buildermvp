@@ -33,6 +33,7 @@ import { computeNodes } from '@/features/flow-editor/utils/computeNodes';
 import { createConnectionEdge, isValidConnection } from '@/features/flow-editor/utils/edgeHelpers';
 import { flowToOutputJson } from '@/features/export/utils/flowToOutputJson';
 import { downloadOutputJson } from '@/features/export/utils/downloadOutputJson';
+import { saveOutputFlow, fetchOutputFlow } from '@/lib/api';
 import { GRID_CONSTANTS } from '@/config/constants';
 
 export default function ProjectCanvasPage() {
@@ -53,13 +54,24 @@ export default function ProjectCanvasPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const project = useAppStore.getState().getProjectById(projectId);
-    if (!project) {
-      router.push('/');
-      return;
+    async function initProject() {
+      let project = useAppStore.getState().getProjectById(projectId);
+      if (!project) {
+        // Not in local store — try fetching from S3
+        try {
+          const fetched = await fetchOutputFlow(projectId);
+          useAppStore.getState().injectProject(fetched);
+          project = fetched;
+        } catch {
+          // Not in S3 either — redirect home
+          router.push('/');
+          return;
+        }
+      }
+      setActiveProject(projectId);
+      setEditName(project.name);
     }
-    setActiveProject(projectId);
-    setEditName(project.name);
+    initProject();
   }, [projectId, setActiveProject, router]);
 
   useEffect(() => {
@@ -141,7 +153,7 @@ export default function ProjectCanvasPage() {
   });
 
   const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((prev) => applyNodeChanges(changes, prev));
@@ -182,12 +194,26 @@ export default function ProjectCanvasPage() {
     [edges, pages, rejectConnection]
   );
 
-  const handleSaveLogic = useCallback(() => {
+  const handleSaveLogic = useCallback(async () => {
+    setSaveStatus('saving');
     setFlowNodes(nodes);
     setFlowEdges(edges);
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [nodes, edges, setFlowNodes, setFlowEdges]);
+    // Read the updated project from store state after Zustand has processed the updates
+    // Small tick to allow Zustand to commit the new nodes/edges before we read back
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const updatedProject = useAppStore.getState().getProjectById(projectId);
+    if (updatedProject) {
+      try {
+        await saveOutputFlow(projectId, updatedProject);
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+      }
+    } else {
+      setSaveStatus('saved');
+    }
+    setTimeout(() => setSaveStatus('idle'), 2500);
+  }, [nodes, edges, projectId, setFlowNodes, setFlowEdges]);
 
   const handleDownloadJson = useCallback(() => {
     if (activeProject) {
@@ -361,23 +387,31 @@ export default function ProjectCanvasPage() {
             <div>
               <button
                 onClick={handleSaveLogic}
+                disabled={saveStatus === 'saving'}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: saveStatus === 'saved' ? '#10b981' : '#35d7bb',
+                  backgroundColor:
+                    saveStatus === 'saved' ? '#10b981' :
+                    saveStatus === 'error' ? '#dc2626' :
+                    saveStatus === 'saving' ? '#1e4d44' : '#35d7bb',
                   color: '#1e1e2e',
                   border: 'none',
                   borderRadius: '6px',
                   fontWeight: 600,
                   fontSize: '14px',
-                  cursor: 'pointer',
+                  cursor: saveStatus === 'saving' ? 'not-allowed' : 'pointer',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   transition: 'background-color 0.2s ease',
                 }}
               >
-                {saveStatus === 'saved' ? '✓ Saved' : 'Save Logic'}
+                {saveStatus === 'saving' ? '…Saving' :
+                  saveStatus === 'saved' ? '✓ Saved' :
+                  saveStatus === 'error' ? '✕ Save failed' : 'Save Logic'}
               </button>
-              <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#10b981' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
-                {saveStatus === 'saved' ? 'Logic saved successfully' : 'Click an edge to select it, then press Delete'}
+              <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#10b981' : saveStatus === 'error' ? '#f87171' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
+                {saveStatus === 'saved' ? 'Saved to cloud' :
+                  saveStatus === 'error' ? 'Could not reach backend' :
+                  'Click an edge to select it, then press Delete'}
               </span>
             </div>
           </div>

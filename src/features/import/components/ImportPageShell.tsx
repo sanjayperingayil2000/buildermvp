@@ -1,182 +1,248 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHeader from '@/shared/components/AppHeader';
-import DropZone from './DropZone';
-import FileStatusCard from './FileStatusCard';
-import { readAndValidateFile, mergeManifests } from '../utils/mergeManifests';
-import { parseManifestToFlow } from '@/shared/lib/parseManifestToFlow';
 import { useAppStore } from '@/shared/store';
+import { parseManifestToFlow } from '@/shared/lib/parseManifestToFlow';
+import { fetchServices, fetchDesignFiles, saveOutputFlow } from '@/lib/api';
 import type { Manifest } from '@/shared/types/manifest';
 
-interface FileValidation {
-  fileName: string;
-  status: 'success' | 'error';
-  errorMessage?: string;
-  manifest?: Manifest;
-  screenCount: number;
-}
+type LoadState = 'idle' | 'loading-services' | 'services-loaded' | 'loading-files' | 'files-loaded' | 'creating' | 'error';
 
 export default function ImportPageShell() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<FileValidation[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const addProject = useAppStore((s) => s.addProject);
 
-  const processFiles = useCallback(async (files: File[]) => {
-    setIsLoading(true);
-    const results = await Promise.all(files.map(readAndValidateFile));
-    setUploadedFiles((prev) => [...prev, ...results]);
+  const [loadState, setLoadState] = useState<LoadState>('idle');
+  const [services, setServices] = useState<string[]>([]);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [pageCount, setPageCount] = useState<number>(0);
+  const [fetchedManifest, setFetchedManifest] = useState<Manifest | null>(null);
+  const [projectName, setProjectName] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
-    setIsLoading(false);
+  // Fetch service list on mount
+  useEffect(() => {
+    setLoadState('loading-services');
+    fetchServices()
+      .then((res) => {
+        setServices(res.services);
+        setLoadState('services-loaded');
+      })
+      .catch((err) => {
+        setErrorMessage(err.message || 'Could not reach the backend. Is Docker running?');
+        setLoadState('error');
+      });
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) processFiles(files);
-    },
-    [processFiles]
-  );
-
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files || []);
-      if (files.length > 0) processFiles(files);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    },
-    [processFiles]
-  );
-
-  const handleLoadIntoEditor = useCallback(() => {
-    const validManifests = uploadedFiles
-      .filter((file) => file.status === 'success' && file.manifest)
-      .map((file) => file.manifest as Manifest);
-
-    if (validManifests.length === 0) return;
-    setIsLoading(true);
-
-    const mergedManifest = mergeManifests(validManifests);
-    const { nodes, edges, pages } = parseManifestToFlow(mergedManifest);
-
-    const projectName = `Project ${new Date().toLocaleDateString()}`;
-    
-    useAppStore.getState().addProject({
-      name: projectName,
-      pages,
-      flowNodes: nodes,
-      flowEdges: edges,
-      startingPageId: null,
-      config: {
-        initialRoute: null,
-        baseUrl: 'https://api.example.com',
-      },
-    });
-
-    const newProjectId = useAppStore.getState().activeProjectId;
-    if (newProjectId) {
-      router.push(`/project/${newProjectId}`);
-    } else {
-      router.push('/');
+  const handleSelectService = useCallback(async (serviceName: string) => {
+    setSelectedService(serviceName);
+    setLoadState('loading-files');
+    setErrorMessage('');
+    try {
+      const res = await fetchDesignFiles(serviceName);
+      // Backend returns { serviceName, pageCount, pages: ManifestPage[], rawFiles }
+      // pages is already in the internal manifest format
+      const manifest: Manifest = { pages: res.pages as Manifest['pages'] };
+      setFetchedManifest(manifest);
+      setPageCount(res.pageCount);
+      setProjectName(serviceName.charAt(0).toUpperCase() + serviceName.slice(1));
+      setLoadState('files-loaded');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load service files.';
+      setErrorMessage(msg);
+      setLoadState('error');
     }
-  }, [uploadedFiles, router]);
-
-  const handleReset = useCallback(() => {
-    setUploadedFiles([]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
+
+  const handleCreateProject = useCallback(async () => {
+    if (!fetchedManifest || !projectName.trim()) return;
+    setLoadState('creating');
+    try {
+      const { nodes, edges, pages } = parseManifestToFlow(fetchedManifest);
+      const projectId = addProject({
+        name: projectName.trim(),
+        pages,
+        flowNodes: nodes,
+        flowEdges: edges,
+        startingPageId: null,
+        config: { initialRoute: null, baseUrl: 'https://api.example.com' },
+      });
+      // Persist immediately to S3
+      const fullProject = useAppStore.getState().getProjectById(projectId);
+      if (fullProject) {
+        await saveOutputFlow(projectId, fullProject);
+      }
+      router.push(`/project/${projectId}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create project.';
+      setErrorMessage(msg);
+      setLoadState('files-loaded'); // allow retry
+    }
+  }, [fetchedManifest, projectName, addProject, router]);
+
+  const handleBack = useCallback(() => {
+    setSelectedService(null);
+    setFetchedManifest(null);
+    setPageCount(0);
+    setProjectName('');
+    setErrorMessage('');
+    setLoadState('services-loaded');
+  }, []);
+
+  /* ── Styles ── */
+  const cardBase: React.CSSProperties = {
+    background: 'rgba(30, 30, 46, 0.85)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    padding: '20px 24px',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '10px 14px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    color: '#f8fafc',
+    fontSize: 14,
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <AppHeader />
+      <div style={{ flex: 1, background: '#0f0f1a', overflowY: 'auto', padding: '40px 20px' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#0f0f1a',
-          padding: '40px 20px',
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 560,
-            background: 'rgba(30, 30, 46, 0.85)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 16,
-            padding: '40px 36px',
-            boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
-          }}
-        >
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f8fafc', margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
-            Import Manifest
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f8fafc', marginBottom: 8 }}>
+            Add New Project
           </h1>
-          <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 28px 0', lineHeight: 1.5 }}>
-            Upload a JSON manifest to define your app screens and navigation links.
+          <p style={{ fontSize: 14, color: '#64748b', marginBottom: 32, lineHeight: 1.6 }}>
+            Select a service to import its screens into the flow editor.
           </p>
 
-          <DropZone
-            isDragging={isDragging}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          />
+          {/* Error banner */}
+          {loadState === 'error' && (
+            <div style={{ ...cardBase, border: '1px solid #7f1d1d', background: 'rgba(127,29,29,0.3)', marginBottom: 24 }}>
+              <div style={{ fontSize: 13, color: '#fca5a5' }}>⚠ {errorMessage}</div>
+            </div>
+          )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            multiple
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-            id="manifest-file-input"
-          />
+          {/* Loading services */}
+          {loadState === 'loading-services' && (
+            <div style={{ ...cardBase, textAlign: 'center', padding: 48 }}>
+              <div style={{ fontSize: 14, color: '#64748b' }}>Loading services…</div>
+            </div>
+          )}
 
-          {uploadedFiles.length > 0 && (
-            <div style={{ marginTop: 24, padding: '16px 18px', borderRadius: 10, background: 'rgba(30, 30, 46, 0.4)', border: '1px solid rgba(255,255,255,0.08)', maxHeight: 200, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>Uploaded Files ({uploadedFiles.length})</span>
-                <button onClick={handleReset} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>Clear All</button>
+          {/* Service list */}
+          {(loadState === 'services-loaded' || loadState === 'loading-files') && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
+                Available Services
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {uploadedFiles.map((file, i) => (
-                  <FileStatusCard key={i} fileName={file.fileName} status={file.status} screenCount={file.screenCount} errorMessage={file.errorMessage} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {services.map((service) => (
+                  <div
+                   key={service}
+                    style={{
+                      ...cardBase,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      border: selectedService === service
+                       ? '1px solid #35d7bb'
+                        : '1px solid rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#f8fafc', textTransform: 'capitalize' }}>
+                        {service}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                        Design files from S3
+                      </div>
+                    </div>
+                    <button
+                     onClick={() => handleSelectService(service)}
+                      disabled={loadState === 'loading-files'}
+                      style={{
+                        padding: '8px 20px',
+                        backgroundColor: selectedService === service ? '#35d7bb' : 'transparent',
+                        color: selectedService === service ? '#0f0f1a' : '#35d7bb',
+                        border: '1px solid #35d7bb',
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: loadState === 'loading-files' ? 'not-allowed' : 'pointer',
+                        opacity: loadState === 'loading-files' && selectedService !== service ? 0.4 : 1,
+                      }}
+                    >
+                      {loadState === 'loading-files' && selectedService === service ? 'Loading…' : 'Select'}
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          {uploadedFiles.length > 0 && (
-            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+          {/* Files loaded — confirmation & project name */}
+          {(loadState === 'files-loaded' || loadState === 'creating') && selectedService && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <button
-                id="load-into-editor-btn"
-                onClick={handleLoadIntoEditor}
-                disabled={isLoading || !uploadedFiles.some(f => f.status === 'success')}
-                style={{
-                  flex: 1,
-                  padding: '12px 24px',
-                  backgroundColor: isLoading || !uploadedFiles.some(f => f.status === 'success') ? '#1e4d44' : '#35d7bb',
-                  color: '#0f0f1a',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: isLoading || !uploadedFiles.some(f => f.status === 'success') ? 'not-allowed' : 'pointer',
-                }}
+               onClick={handleBack}
+                style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0, width: 'fit-content' }}
               >
-                {isLoading ? 'Loading...' : `Load ${uploadedFiles.filter(f => f.status === 'success').reduce((acc, f) => acc + f.screenCount, 0)} screens into Flow Editor →`}
-              </button>
+                ← Back to services
+             </button>
+
+              <div style={cardBase}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, color: '#f8fafc', fontWeight: 600, textTransform: 'capitalize' }}>
+                    {selectedService}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>·</span>
+                  <span style={{ fontSize: 13, color: '#94a3b8' }}>{pageCount} screen{pageCount !== 1 ? 's' : ''} found</span>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 8 }}>
+                    Project name
+                 </label>
+                  <input
+                   type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="e.g. Didi"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <button
+                 onClick={handleCreateProject}
+                  disabled={loadState === 'creating' || !projectName.trim()}
+                  style={{
+                    width: '100%',
+                    padding: '12px 20px',
+                    backgroundColor: loadState === 'creating' || !projectName.trim() ? '#1e4d44' : '#35d7bb',
+                    color: '#0f0f1a',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: loadState === 'creating' || !projectName.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {loadState === 'creating' ? 'Creating…' : `Create Project (${pageCount} screens)`}
+                </button>
+              </div>
             </div>
           )}
+
         </div>
       </div>
     </div>

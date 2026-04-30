@@ -43,6 +43,7 @@ interface AppState {
   restoreActionElement: (pageId: string, elementId: string) => void;
   updateActionElement: (pageId: string, elementId: string, updates: Partial<ActionElement>) => void;
 
+  injectProject: (project: Project) => void;
   clearAll: () => void;
 }
 
@@ -308,6 +309,14 @@ export const useAppStore = create<AppState>()(
               : p
           ),
         }));
+      },
+
+      injectProject: (project) => {
+        set((state) => {
+          // Skip if already in store (prevents duplicates on re-sync)
+          if (state.projects.find((p) => p.id === project.id)) return {};
+          return { projects: [...state.projects, project] };
+        });
       },
 
       clearAll: () => {

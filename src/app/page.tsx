@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/shared/store';
 import AppHeader from '@/shared/components/AppHeader';
 import { flowToOutputJson } from '@/features/export/utils/flowToOutputJson';
 import { downloadOutputJson } from '@/features/export/utils/downloadOutputJson';
+import { fetchOutputFlows, fetchOutputFlow, deleteOutputFlow } from '@/lib/api';
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -16,6 +17,39 @@ export default function ProjectsPage() {
   const setActiveProject = useAppStore((s) => s.setActiveProject);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // On mount: fetch S3 flow list and add any projects not yet in local Zustand state
+  useEffect(() => {
+    let cancelled = false;
+    async function syncFromS3() {
+      setIsSyncing(true);
+      setSyncError(null);
+      try {
+        const { flows } = await fetchOutputFlows();
+        const knownIds = new Set(projects.map((p) => p.id));
+        const missingIds = flows.map((f) => f.id).filter((id) => !knownIds.has(id));
+        for (const id of missingIds) {
+          if (cancelled) break;
+          try {
+            const project = await fetchOutputFlow(id);
+            // addProject will deduplicate based on pages, but we need to inject
+            // with the original id. Use the store directly to avoid generating a new id.
+            useAppStore.getState().injectProject(project);
+          } catch {
+            // If one project fails to load, continue with the rest
+          }
+        }
+      } catch {
+        if (!cancelled) setSyncError('Could not reach backend. Showing local projects only.');
+      } finally {
+        if (!cancelled) setIsSyncing(false);
+      }
+    }
+    syncFromS3();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = useCallback((projectId: string) => {
     setActiveProject(projectId);
@@ -26,10 +60,16 @@ export default function ProjectsPage() {
     setDeleteConfirmId(projectId);
   }, []);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (deleteConfirmId) {
       deleteProject(deleteConfirmId);
       setDeleteConfirmId(null);
+      try {
+        await deleteOutputFlow(deleteConfirmId);
+      } catch {
+        // Local delete already succeeded; S3 delete failure is non-fatal
+        // The project will be re-synced from S3 on next load if still present there
+      }
     }
   }, [deleteConfirmId, deleteProject]);
 
@@ -65,6 +105,11 @@ export default function ProjectsPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', margin: 0 }}>
               Projects
+              {isSyncing && (
+                <span style={{ fontSize: 12, fontWeight: 400, color: '#64748b', marginLeft: 12 }}>
+                  syncing…
+                </span>
+              )}
             </h1>
             <Link
               href="/import"
@@ -83,6 +128,12 @@ export default function ProjectsPage() {
               + Add New Project
             </Link>
           </div>
+
+          {syncError && (
+            <div style={{ fontSize: 12, color: '#f87171', marginBottom: 16, padding: '8px 14px', background: 'rgba(127,29,29,0.2)', borderRadius: 8, border: '1px solid #7f1d1d' }}>
+              ⚠ {syncError}
+            </div>
+          )}
 
           {projects.length === 0 ? (
             <div
