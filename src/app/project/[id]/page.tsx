@@ -427,7 +427,7 @@ export default function ProjectCanvasPage() {
               <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#10b981' : saveStatus === 'error' ? '#f87171' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
                 {saveStatus === 'saved' ? 'Saved to cloud' :
                   saveStatus === 'error' ? 'Could not reach backend' :
-                  'Click an edge to select it, then press Delete'}
+                  ''}
               </span>
             </div>
             <div>
