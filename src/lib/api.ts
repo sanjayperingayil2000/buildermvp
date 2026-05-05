@@ -35,6 +35,13 @@ export interface SaveFlowResponse {
   savedAt: string;
 }
 
+export interface PublishFlowResponse {
+  success: boolean;
+  flowId: string;
+  key: string;
+  publishedAt: string;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Design Files — read from S3, used for import                       */
 /* ------------------------------------------------------------------ */
@@ -79,6 +86,21 @@ export async function saveOutputFlow(flowId: string, project: Project): Promise<
     body: JSON.stringify(project),
   });
   if (!res.ok) throw new Error(`Failed to save flow ${flowId}: ${res.status}`);
+  return res.json();
+}
+
+/** Publishes the output JSON using the existing backend endpoint with a serviceName query param */
+export async function publishOutputFlow(
+  flowId: string,
+  serviceName: string,
+  outputJson: Record<string, unknown>,
+): Promise<SaveFlowResponse> {
+  const res = await fetch(`${API_BASE}/api/output-flows/${flowId}?serviceName=${encodeURIComponent(serviceName)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(outputJson),
+  });
+  if (!res.ok) throw new Error(`Failed to publish flow ${flowId}: ${res.status}`);
   return res.json();
 }
 

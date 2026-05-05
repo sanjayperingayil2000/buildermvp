@@ -33,7 +33,7 @@ import { computeNodes } from '@/features/flow-editor/utils/computeNodes';
 import { createConnectionEdge, isValidConnection } from '@/features/flow-editor/utils/edgeHelpers';
 import { flowToOutputJson } from '@/features/export/utils/flowToOutputJson';
 import { downloadOutputJson } from '@/features/export/utils/downloadOutputJson';
-import { saveOutputFlow, fetchOutputFlow } from '@/lib/api';
+import { saveOutputFlow, fetchOutputFlow, publishOutputFlow } from '@/lib/api';
 import { GRID_CONSTANTS } from '@/config/constants';
 
 export default function ProjectCanvasPage() {
@@ -154,6 +154,7 @@ export default function ProjectCanvasPage() {
 
   const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
 
   const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((prev) => applyNodeChanges(changes, prev));
@@ -221,6 +222,21 @@ export default function ProjectCanvasPage() {
       downloadOutputJson(output, activeProject.name);
     }
   }, [activeProject, nodes, edges, startingPageId]);
+
+  const handlePublish = useCallback(async () => {
+    if (!activeProject) return;
+    setPublishStatus('publishing');
+    try {
+      // Derive the service name from the project name (uppercase to match S3 folder convention)
+      const serviceName = activeProject.name.toUpperCase();
+      const outputJson = flowToOutputJson(nodes, edges, startingPageId);
+      await publishOutputFlow(projectId, serviceName, outputJson as unknown as Record<string, unknown>);
+      setPublishStatus('published');
+    } catch {
+      setPublishStatus('error');
+    }
+    setTimeout(() => setPublishStatus('idle'), 3000);
+  }, [activeProject, nodes, edges, startingPageId, projectId]);
 
   const handleAddPages = useCallback((newPages: PageDescriptor[], newNodes: Node[]) => {
     addPagesToProject(newPages, newNodes);
@@ -412,6 +428,37 @@ export default function ProjectCanvasPage() {
                 {saveStatus === 'saved' ? 'Saved to cloud' :
                   saveStatus === 'error' ? 'Could not reach backend' :
                   'Click an edge to select it, then press Delete'}
+              </span>
+            </div>
+            <div>
+              <button
+                id="publish-s3-btn"
+                onClick={handlePublish}
+                disabled={publishStatus === 'publishing'}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor:
+                    publishStatus === 'published' ? '#10b981' :
+                    publishStatus === 'error' ? '#dc2626' :
+                    publishStatus === 'publishing' ? '#4a2d7a' : '#8b5cf6',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: publishStatus === 'publishing' ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                  transition: 'background-color 0.2s ease',
+                }}
+              >
+                {publishStatus === 'publishing' ? '…Publishing' :
+                  publishStatus === 'published' ? '✓ Published' :
+                  publishStatus === 'error' ? '✕ Publish failed' : '🚀 Publish to S3'}
+              </button>
+              <span style={{ fontSize: 11, color: publishStatus === 'published' ? '#10b981' : publishStatus === 'error' ? '#f87171' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
+                {publishStatus === 'published' ? 'Published to output-flows' :
+                  publishStatus === 'error' ? 'Publish failed' :
+                  'Publish output to S3'}
               </span>
             </div>
           </div>
