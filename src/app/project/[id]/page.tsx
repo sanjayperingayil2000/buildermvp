@@ -33,7 +33,7 @@ import { computeNodes } from '@/features/flow-editor/utils/computeNodes';
 import { createConnectionEdge, isValidConnection } from '@/features/flow-editor/utils/edgeHelpers';
 import { flowToOutputJson } from '@/features/export/utils/flowToOutputJson';
 import { downloadOutputJson } from '@/features/export/utils/downloadOutputJson';
-import { saveOutputFlow, fetchOutputFlow, publishOutputFlow } from '@/lib/api';
+import { fetchOutputFlow, publishOutputFlow } from '@/lib/api';
 import { GRID_CONSTANTS } from '@/config/constants';
 
 export default function ProjectCanvasPage() {
@@ -138,7 +138,11 @@ export default function ProjectCanvasPage() {
 
   useEffect(() => {
     if (!hasInitialised.current) return;
-    setEdges(storedEdges.map((e) => ({ ...e, type: e.type ?? 'deletable' })));
+    setEdges((prev) => {
+      const storedEdgeIds = new Set(storedEdges.map((e) => e.id));
+      const next = prev.filter((e) => storedEdgeIds.has(e.id));
+      return next.length !== prev.length ? next : prev;
+    });
   }, [storedEdges]);
 
   const nodeTypes = useMemo(() => ({ pageNode: PageNode }), []);
@@ -153,21 +157,32 @@ export default function ProjectCanvasPage() {
   });
 
   const [connectionRejection, setConnectionRejection] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
 
   const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => {
-    setNodes((prev) => applyNodeChanges(changes, prev));
-  }, []);
+    setNodes((prev) => {
+      const next = applyNodeChanges(changes, prev);
+      setTimeout(() => setFlowNodes(next), 0);
+      return next;
+    });
+  }, [setFlowNodes]);
 
   const onEdgesChange: OnEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setEdges((prev) => applyEdgeChanges(changes, prev));
-  }, []);
+    setEdges((prev) => {
+      const next = applyEdgeChanges(changes, prev);
+      setTimeout(() => setFlowEdges(next), 0);
+      return next;
+    });
+  }, [setFlowEdges]);
 
   const onConnect = useCallback((connection: Connection) => {
     const newEdge = createConnectionEdge(connection);
-    setEdges((prev) => [...prev, newEdge]);
-  }, []);
+    setEdges((prev) => {
+      const next = [...prev, newEdge];
+      setTimeout(() => setFlowEdges(next), 0);
+      return next;
+    });
+  }, [setFlowEdges]);
 
   const rejectConnection = useCallback((msg: string): false => {
     setConnectionRejection(msg);
@@ -195,26 +210,7 @@ export default function ProjectCanvasPage() {
     [edges, pages, rejectConnection]
   );
 
-  const handleSaveLogic = useCallback(async () => {
-    setSaveStatus('saving');
-    setFlowNodes(nodes);
-    setFlowEdges(edges);
-    // Read the updated project from store state after Zustand has processed the updates
-    // Small tick to allow Zustand to commit the new nodes/edges before we read back
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    const updatedProject = useAppStore.getState().getProjectById(projectId);
-    if (updatedProject) {
-      try {
-        await saveOutputFlow(projectId, updatedProject);
-        setSaveStatus('saved');
-      } catch {
-        setSaveStatus('error');
-      }
-    } else {
-      setSaveStatus('saved');
-    }
-    setTimeout(() => setSaveStatus('idle'), 2500);
-  }, [nodes, edges, projectId, setFlowNodes, setFlowEdges]);
+
 
   const handleDownloadJson = useCallback(() => {
     if (activeProject) {
@@ -227,8 +223,8 @@ export default function ProjectCanvasPage() {
     if (!activeProject) return;
     setPublishStatus('publishing');
     try {
-      // Derive the service name from the project name (uppercase to match S3 folder convention)
-      const serviceName = activeProject.name.toUpperCase();
+      // Derive the service name from the project name (lowercase to match S3 folder convention)
+      const serviceName = activeProject.name.toLowerCase();
       const outputJson = flowToOutputJson(nodes, edges, startingPageId);
       await publishOutputFlow(projectId, serviceName, outputJson as unknown as Record<string, unknown>);
       setPublishStatus('published');
@@ -402,36 +398,6 @@ export default function ProjectCanvasPage() {
             </button>
             <div>
               <button
-                onClick={handleSaveLogic}
-                disabled={saveStatus === 'saving'}
-                style={{
-                  padding: '8px 20px',
-                  backgroundColor:
-                    saveStatus === 'saved' ? '#10b981' :
-                    saveStatus === 'error' ? '#dc2626' :
-                    saveStatus === 'saving' ? '#1e4d44' : '#35d7bb',
-                  color: '#1e1e2e',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                  cursor: saveStatus === 'saving' ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                  transition: 'background-color 0.2s ease',
-                }}
-              >
-                {saveStatus === 'saving' ? '…Saving' :
-                  saveStatus === 'saved' ? '✓ Saved' :
-                  saveStatus === 'error' ? '✕ Save failed' : 'Save Logic'}
-              </button>
-              <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#10b981' : saveStatus === 'error' ? '#f87171' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
-                {saveStatus === 'saved' ? 'Saved to cloud' :
-                  saveStatus === 'error' ? 'Could not reach backend' :
-                  ''}
-              </span>
-            </div>
-            <div>
-              <button
                 id="publish-s3-btn"
                 onClick={handlePublish}
                 disabled={publishStatus === 'publishing'}
@@ -440,8 +406,8 @@ export default function ProjectCanvasPage() {
                   backgroundColor:
                     publishStatus === 'published' ? '#10b981' :
                     publishStatus === 'error' ? '#dc2626' :
-                    publishStatus === 'publishing' ? '#4a2d7a' : '#8b5cf6',
-                  color: '#ffffff',
+                    publishStatus === 'publishing' ? '#4a2d7a' : '#35d7bb',
+                  color: publishStatus === 'publishing' || publishStatus === 'error' || publishStatus === 'published' ? '#ffffff' : '#1e1e2e',
                   border: 'none',
                   borderRadius: '6px',
                   fontWeight: 600,
@@ -451,14 +417,14 @@ export default function ProjectCanvasPage() {
                   transition: 'background-color 0.2s ease',
                 }}
               >
-                {publishStatus === 'publishing' ? '…Publishing' :
-                  publishStatus === 'published' ? '✓ Published' :
-                  publishStatus === 'error' ? '✕ Publish failed' : '🚀 Publish to S3'}
+                {publishStatus === 'publishing' ? '…Saving & Publishing' :
+                  publishStatus === 'published' ? '✓ Saved & Published' :
+                  publishStatus === 'error' ? '✕ Publish failed' : 'Save & Publish'}
               </button>
               <span style={{ fontSize: 11, color: publishStatus === 'published' ? '#10b981' : publishStatus === 'error' ? '#f87171' : '#64748b', display: 'block', marginTop: 6, textAlign: 'right', transition: 'color 0.2s ease' }}>
-                {publishStatus === 'published' ? 'Published to output-flows' :
+                {publishStatus === 'published' ? 'Published to outputfiles' :
                   publishStatus === 'error' ? 'Publish failed' :
-                  'Publish output to S3'}
+                  'Save flow & publish to S3'}
               </span>
             </div>
           </div>

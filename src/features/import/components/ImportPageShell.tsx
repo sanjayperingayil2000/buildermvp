@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import AppHeader from '@/shared/components/AppHeader';
 import { useAppStore } from '@/shared/store';
 import { parseManifestToFlow } from '@/shared/lib/parseManifestToFlow';
-import { fetchServices, fetchDesignFiles, saveOutputFlow } from '@/lib/api';
+import { fetchServices, fetchDesignFiles } from '@/lib/api';
 import type { Manifest } from '@/shared/types/manifest';
 import { normalizeWidgetManifest } from '@/shared/lib/adapters/widgetManifestAdapter';
 
@@ -70,11 +70,7 @@ export default function ImportPageShell() {
         startingPageId: null,
         config: { initialRoute: null, baseUrl: 'https://api.example.com' },
       });
-      // Persist immediately to S3
-      const fullProject = useAppStore.getState().getProjectById(projectId);
-      if (fullProject) {
-        await saveOutputFlow(projectId, fullProject);
-      }
+      // Store state handles local persistence automatically
       router.push(`/project/${projectId}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create project.';

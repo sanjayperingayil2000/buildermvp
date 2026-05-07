@@ -66,28 +66,19 @@ export async function fetchDesignFiles(serviceName: string): Promise<DesignFiles
 
 /** Lists all saved output flows (metadata only — id, savedAt, size) */
 export async function fetchOutputFlows(): Promise<OutputFlowsListResponse> {
-  const res = await fetch(`${API_BASE}/api/output-flows`);
+  const res = await fetch(`${API_BASE}/api/output-files`);
   if (!res.ok) throw new Error(`Failed to fetch output flows: ${res.status}`);
   return res.json();
 }
 
 /** Fetches a single saved output flow by its project ID */
 export async function fetchOutputFlow(flowId: string): Promise<Project> {
-  const res = await fetch(`${API_BASE}/api/output-flows/${flowId}`);
+  const res = await fetch(`${API_BASE}/api/output-files/${flowId}`);
   if (!res.ok) throw new Error(`Flow not found: ${flowId} (${res.status})`);
   return res.json();
 }
 
-/** Saves (or overwrites) a project to S3 — call after every save */
-export async function saveOutputFlow(flowId: string, project: Project): Promise<SaveFlowResponse> {
-  const res = await fetch(`${API_BASE}/api/output-flows/${flowId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(project),
-  });
-  if (!res.ok) throw new Error(`Failed to save flow ${flowId}: ${res.status}`);
-  return res.json();
-}
+
 
 /** Publishes the output JSON using the existing backend endpoint with a serviceName query param */
 export async function publishOutputFlow(
@@ -95,7 +86,7 @@ export async function publishOutputFlow(
   serviceName: string,
   outputJson: Record<string, unknown>,
 ): Promise<SaveFlowResponse> {
-  const res = await fetch(`${API_BASE}/api/output-flows/${flowId}?serviceName=${encodeURIComponent(serviceName)}`, {
+  const res = await fetch(`${API_BASE}/api/output-files/${flowId}?serviceName=${encodeURIComponent(serviceName)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(outputJson),
@@ -106,7 +97,7 @@ export async function publishOutputFlow(
 
 /** Deletes a saved output flow from S3 */
 export async function deleteOutputFlow(flowId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/output-flows/${flowId}`, {
+  const res = await fetch(`${API_BASE}/api/output-files/${flowId}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(`Failed to delete flow ${flowId}: ${res.status}`);
