@@ -1,0 +1,255 @@
+{
+  "schema_version": "1.0",
+  "service": "DeliveryScan",
+  "base_views": {
+    "service_modal": {
+      "background_color": "{{sys.colorScheme.surface}}",
+      "corner_radius": "{{ref.shape.shape-lg}}",
+      "padding": "{{ref.spacing.sp-7}}",
+      "elevation": 4,
+      "shadow_color": "{{sys.colorScheme.shadow}}"
+    }
+  },
+  "components": {
+    "modalHeader": {
+      "component_id": "3689:31335",
+      "defaults": {
+        "Show cancel": true,
+        "Show Question": true,
+        "Text": "Pago de Repartidor",
+        "Modal Title_color": "{{sys.colorScheme.onSurface}}"
+      }
+    },
+    "iconButton": {
+      "component_id": "4834:2869",
+      "defaults": {}
+    },
+    "help": {
+      "component_id": "4299:9075",
+      "defaults": {
+        "Style": "Outlined"
+      }
+    },
+    "cancel": {
+      "component_id": "4834:3507",
+      "defaults": {}
+    },
+    "Ilustrations_Icons": {
+      "component_id": "4436:2499",
+      "defaults": {
+        "Type": "QR",
+        "background_color": "#E2F6FF",
+        "corner_radius": "{{ref.shape.shape-full}}",
+        "item_spacing": "{{ref.spacing.sp-3}}",
+        "padding_top": "{{ref.spacing.sp-6}}",
+        "padding_right": "{{ref.spacing.sp-0}}",
+        "padding_bottom": "{{ref.spacing.sp-6}}",
+        "padding_left": "{{ref.spacing.sp-0}}"
+      }
+    },
+    "notes": {
+      "component_id": "3689:31419",
+      "defaults": {
+        "Type": "Error",
+        "Size": "S",
+        "Line 1_color": "{{sys.colorScheme.onSurface}}",
+        "background_color": "{{sys.colorScheme.errorContainer}}",
+        "corner_radius": "{{ref.shape.shape-md}}",
+        "item_spacing": "{{ref.spacing.sp-3}}",
+        "padding": "{{ref.spacing.sp-3}}"
+      }
+    },
+    "error": {
+      "component_id": "3680:28838",
+      "defaults": {
+        "Style": "Round"
+      }
+    },
+    "Loader anim": {
+      "component_id": "3730:32877",
+      "defaults": {
+        "state": "1"
+      }
+    },
+    "serviceCard": {
+      "component_id": "3689:31377",
+      "defaults": {
+        "Type": "Image",
+        "Status": "Default",
+        "Number_color": "{{sys.colorScheme.onSurface}}",
+        "Content_color": "{{sys.colorScheme.onSurface}}",
+        "padding_top": "{{ref.spacing.sp-5}}",
+        "padding_right": "{{ref.spacing.sp-0}}",
+        "padding_bottom": "{{ref.spacing.sp-0}}",
+        "padding_left": "{{ref.spacing.sp-0}}"
+      }
+    },
+    "modalActions": {
+      "component_id": "3730:32692",
+      "defaults": {
+        "Label_color": "{{sys.colorScheme.onSurface}}",
+        "Label_style": "{{sys.textTheme.bodyLarge}}",
+        "item_spacing": "{{ref.spacing.sp-6}}",
+        "padding_top": "{{ref.spacing.sp-6}}",
+        "padding_right": "{{ref.spacing.sp-0}}",
+        "padding_bottom": "{{ref.spacing.sp-0}}",
+        "padding_left": "{{ref.spacing.sp-0}}"
+      }
+    },
+    "Button": {
+      "component_id": "3467:22004",
+      "defaults": {
+        "Icon": {
+          "$ref": "3467:21218"
+        },
+        "Show icon": false,
+        "Label text": "ANTERIOR",
+        "Type": "Outline",
+        "Size": "Medium",
+        "State": "Enabled",
+        "Label_color": "{{sys.colorScheme.onSurface}}",
+        "Label_style": "{{sys.textTheme.bodyLarge}}"
+      }
+    },
+    "Icon": {
+      "component_id": "3467:21218",
+      "defaults": {}
+    },
+    "Button_3467_21484": {
+      "component_id": "3467:21484",
+      "defaults": {
+        "Icon": {
+          "$ref": "3467:21218"
+        },
+        "Show icon": false,
+        "Label text": "SIGUIENTE",
+        "Type": "Primary",
+        "Size": "Medium",
+        "State": "Disabled",
+        "Label_color": "{{sys.colorScheme.onSurface}}"
+      }
+    }
+  },
+  "pages": {
+    "delivery_scan_invalid": {
+      "base_view": "service_modal",
+      "frame_name": "Delivery Scan | Invalid",
+      "layout": {
+        "mode": "vertical",
+        "item_spacing": "{{ref.spacing.sp-7}}",
+        "primary_axis_align": "SPACE_BETWEEN",
+        "cross_axis_align": "CENTER"
+      },
+      "children": [
+        {
+          "use": "modalHeader"
+        },
+        {
+          "use": "Ilustrations_Icons"
+        },
+        {
+          "use": "group",
+          "name": "Wrapper",
+          "layout_mode": "vertical",
+          "gap": "{{ref.spacing.sp-6}}",
+          "children": [
+            {
+              "use": "text",
+              "characters": "Escanea la referencia para continuar",
+              "style": "{{sys.textTheme.headlineSmall}}",
+              "color": "{{sys.colorScheme.onSurface}}",
+              "align": "center"
+            },
+            {
+              "use": "notes",
+              "layout": "expanded"
+            }
+          ]
+        }
+      ]
+    },
+    "delivery_scan_provider_identification": {
+      "base_view": "service_modal",
+      "frame_name": "Delivery Scan | Provider Identification",
+      "layout": {
+        "mode": "vertical",
+        "item_spacing": "{{ref.spacing.sp-7}}",
+        "primary_axis_align": "CENTER",
+        "cross_axis_align": "CENTER"
+      },
+      "children": [
+        {
+          "use": "Loader anim"
+        },
+        {
+          "use": "text",
+          "characters": "Identificando proveedor...",
+          "color": "{{sys.colorScheme.onSurface}}",
+          "align": "center"
+        }
+      ]
+    },
+    "delivery_scan_service_provider_default": {
+      "base_view": "service_modal",
+      "frame_name": "Delivery Scan | Service Provider | Default",
+      "layout": {
+        "mode": "vertical",
+        "item_spacing": "{{ref.spacing.sp-7}}",
+        "primary_axis_align": "SPACE_BETWEEN",
+        "cross_axis_align": "CENTER"
+      },
+      "children": [
+        {
+          "use": "modalHeader",
+          "Show Question": false,
+          "Text": "Seleccione el proveedor"
+        },
+        {
+          "use": "group",
+          "name": "row",
+          "layout_mode": "horizontal",
+          "gap": "{{ref.spacing.sp-8}}",
+          "children": [
+            {
+              "use": "serviceCard"
+            },
+            {
+              "use": "serviceCard"
+            },
+            {
+              "use": "serviceCard"
+            }
+          ]
+        },
+        {
+          "use": "modalActions"
+        }
+      ]
+    },
+    "delivery_scan": {
+      "base_view": "service_modal",
+      "frame_name": "Delivery Scan",
+      "layout": {
+        "mode": "vertical",
+        "item_spacing": "{{ref.spacing.sp-7}}",
+        "primary_axis_align": "SPACE_BETWEEN",
+        "cross_axis_align": "CENTER"
+      },
+      "children": [
+        {
+          "use": "modalHeader"
+        },
+        {
+          "use": "Ilustrations_Icons"
+        },
+        {
+          "use": "text",
+          "characters": "Escanea la referencia para continuar",
+          "style": "{{sys.textTheme.headlineSmall}}",
+          "color": "{{sys.colorScheme.onSurface}}",
+          "align": "center"
+        }
+      ]
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import type { Manifest } from '@/shared/types/manifest';
 import { normalizeFlutterManifest } from '@/shared/lib/adapters/flutterManifestAdapter';
 import { normalizeWidgetManifest } from '@/shared/lib/adapters/widgetManifestAdapter';
+import { normalizeComponentManifest } from '@/shared/lib/adapters/componentSchemaAdapter';
 import { validateManifest } from '@/shared/lib/validators/manifestValidator';
 
 export function readAndValidateFile(file: File): Promise<{ fileName: string; status: 'success' | 'error'; errorMessage?: string; manifest?: Manifest; screenCount: number }> {
@@ -18,7 +19,12 @@ export function readAndValidateFile(file: File): Promise<{ fileName: string; sta
         const rawJson = parsed as Record<string, unknown>;
 
         // Structural detection — duck-type by inspecting the first page's shape
-        if (Array.isArray(rawJson.pages) && rawJson.pages.length > 0) {
+        if (
+          rawJson.schema_version === '1.0' ||
+          (rawJson.pages && typeof rawJson.pages === 'object' && !Array.isArray(rawJson.pages))
+        ) {
+          parsed = normalizeComponentManifest(rawJson);
+        } else if (Array.isArray(rawJson.pages) && rawJson.pages.length > 0) {
           const firstPage = rawJson.pages[0] as Record<string, unknown>;
 
           // Pages with 'widgets' → widget manifest, needs normalisation
